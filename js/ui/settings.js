@@ -13,9 +13,9 @@ const STORAGE_KEYS = {
 };
 
 const MODELS = [
-  { id: 'gemini-1.5-flash-latest', name: 'gemini-1.5-flash-latest', desc: 'Fast, cheap — recommended for large batches', cost: '~$0.01 / 1k articles' },
+  { id: 'gemini-flash-latest', name: 'gemini-flash-latest', desc: 'Fast, cheap — recommended for large batches', cost: '~$0.01 / 1k articles' },
   { id: 'gemini-2.0-flash', name: 'gemini-2.0-flash', desc: 'Next generation fast model', cost: '~$0.01 / 1k articles' },
-  { id: 'gemini-1.5-pro-latest', name: 'gemini-1.5-pro-latest', desc: 'Highest quality, slower, more expensive', cost: '~$0.18 / 1k articles' },
+  { id: 'gemini-pro-latest', name: 'gemini-pro-latest', desc: 'Highest quality, slower, more expensive', cost: '~$0.18 / 1k articles' },
 ];
 
 let initialized = false;
