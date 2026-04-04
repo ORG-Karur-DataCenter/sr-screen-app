@@ -1,0 +1,354 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="description" content="SRScreen — AI-powered systematic review screening agent. Screen articles with Gemini AI, build criteria visually, and export PRISMA-ready results." />
+  <title>SRScreen — Systematic Review Screening Agent</title>
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=JetBrains+Mono:wght@400;500;600&family=DM+Sans:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <!-- CSS (order matters) -->
+  <link rel="stylesheet" href="styles/tokens.css" />
+  <link rel="stylesheet" href="styles/layout.css" />
+  <link rel="stylesheet" href="styles/components.css" />
+  <link rel="stylesheet" href="styles/animations.css" />
+  <link rel="stylesheet" href="styles/tabs/dashboard.css" />
+  <link rel="stylesheet" href="styles/tabs/criteria.css" />
+  <link rel="stylesheet" href="styles/tabs/upload.css" />
+  <link rel="stylesheet" href="styles/tabs/results.css" />
+  <link rel="stylesheet" href="styles/tabs/audit.css" />
+  <link rel="stylesheet" href="styles/tabs/settings.css" />
+</head>
+<body>
+
+  <!-- GRAIN OVERLAY -->
+  <div id="grain-overlay" aria-hidden="true"></div>
+
+  <!-- MOBILE MENU TOGGLE -->
+  <button class="menu-toggle" id="menu-toggle" aria-label="Toggle menu">
+    <svg width="20" height="20" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+  </button>
+
+  <!-- APP WRAPPER -->
+  <div id="app">
+
+    <!-- ── SIDEBAR ─────────────────────────── -->
+    <nav id="sidebar">
+      <div class="sidebar-brand">
+        <div class="brand-logo">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--accent-teal)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/>
+            <path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/>
+          </svg>
+        </div>
+        <span class="brand-text">SR<em>Screen</em></span>
+      </div>
+
+      <div class="nav-section-label">Main</div>
+      <ul class="nav-list" role="navigation">
+        <li>
+          <a class="nav-item active" data-tab="dashboard" id="nav-dashboard">
+            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"/></svg>
+            Dashboard
+          </a>
+        </li>
+        <li>
+          <a class="nav-item" data-tab="criteria" id="nav-criteria">
+            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"/></svg>
+            Criteria Builder
+          </a>
+        </li>
+        <li>
+          <a class="nav-item" data-tab="upload" id="nav-upload">
+            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/></svg>
+            Upload &amp; Screen
+          </a>
+        </li>
+        <li>
+          <a class="nav-item" data-tab="results" id="nav-results">
+            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            Results
+          </a>
+        </li>
+        <li>
+          <a class="nav-item" data-tab="audit" id="nav-audit">
+            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+            Reasoning Log
+          </a>
+        </li>
+      </ul>
+
+      <div class="nav-section-label">System</div>
+      <ul class="nav-list" role="navigation">
+        <li>
+          <a class="nav-item" data-tab="settings" id="nav-settings">
+            <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.066 2.573c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.573 1.066c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.066-2.573c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/></svg>
+            Settings
+          </a>
+        </li>
+      </ul>
+
+      <div class="sidebar-footer">
+        <div id="api-status-pill" class="status-pill status-inactive">
+          <span class="pulse-dot"></span>
+          <span id="api-status-label">No API Key</span>
+        </div>
+      </div>
+    </nav>
+
+    <!-- ── MAIN CONTENT ───────────────────── -->
+    <main id="main-content">
+
+      <!-- ===== TAB: DASHBOARD ===== -->
+      <div id="tab-dashboard" class="tab-panel active">
+        <div class="page-header">
+          <h1>Overview Dashboard</h1>
+          <p>Your screening metrics at a glance.</p>
+        </div>
+
+        <!-- API key banner (shown when no key) -->
+        <div class="dash-banner" id="dash-banner">
+          <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-2.5L13.732 4c-.77-.833-1.964-.833-2.732 0L4.082 16.5c-.77.833.192 2.5 1.732 2.5z"/></svg>
+          <span>Set your Gemini API Key in <a id="dash-banner-link">Settings</a> to start screening articles.</span>
+        </div>
+
+        <!-- KPI Cards -->
+        <div class="stats-grid" id="stats-grid">
+          <div class="stat-card">
+            <div class="stat-icon teal">
+              <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            </div>
+            <div class="stat-body">
+              <span class="stat-value mono" id="kpi-total">0</span>
+              <span class="stat-label">Total Screened</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon teal">
+              <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <div class="stat-body">
+              <span class="stat-value mono" id="kpi-included">0</span>
+              <span class="stat-label">Included</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon crimson">
+              <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <div class="stat-body">
+              <span class="stat-value mono" id="kpi-excluded">0</span>
+              <span class="stat-label">Excluded</span>
+            </div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-icon amber">
+              <svg width="22" height="22" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+            </div>
+            <div class="stat-body">
+              <span class="stat-value mono" id="kpi-uncertain">0</span>
+              <span class="stat-label">Uncertain</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Bento: Donut + PRISMA -->
+        <div class="dashboard-bento">
+          <div class="glass-card donut-card">
+            <h3>Inclusion Rate</h3>
+            <div class="donut-wrapper">
+              <div class="donut-canvas-wrap">
+                <canvas id="donut-canvas" width="360" height="360"></canvas>
+                <div class="donut-center-label">
+                  <span class="donut-pct" id="donut-pct">—</span>
+                  <span class="donut-sub">included</span>
+                </div>
+              </div>
+              <div class="donut-legend" id="donut-legend">
+                <div class="legend-item"><span class="legend-dot" style="background:var(--accent-teal)"></span>Included</div>
+                <div class="legend-item"><span class="legend-dot" style="background:var(--accent-crimson)"></span>Excluded</div>
+                <div class="legend-item"><span class="legend-dot" style="background:var(--accent-amber)"></span>Uncertain</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="glass-card prisma-card">
+            <h3>PRISMA Flow</h3>
+            <div class="prisma-svg-wrap" id="prisma-svg-wrap">
+              <div class="empty-state-small">Run a screening session to generate the PRISMA flow diagram.</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recent Runs -->
+        <div class="glass-card recent-runs-card">
+          <h3>Recent Sessions</h3>
+          <div id="recent-runs-list">
+            <div class="empty-state-small">No sessions yet. Upload articles and screen to see history here.</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== TAB: CRITERIA BUILDER ===== -->
+      <div id="tab-criteria" class="tab-panel">
+        <div class="page-header">
+          <h1>Criteria Builder</h1>
+          <p>Define your inclusion and exclusion criteria visually. The criteria auto-generate the AI screening prompt.</p>
+        </div>
+        <div class="criteria-layout">
+          <!-- Left: Builder Panels -->
+          <div class="criteria-panels" id="criteria-panels">
+            <!-- Rendered by criteria.js -->
+          </div>
+          <!-- Right: Live JSON Preview -->
+          <div class="json-preview-card glass-card" id="json-preview-card">
+            <div class="json-preview-header">
+              <h3>Live Preview</h3>
+              <div class="criteria-actions">
+                <button class="btn btn-secondary" id="btn-load-criteria" data-tooltip="Load from .json file">
+                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"/></svg>
+                  Load
+                </button>
+                <button class="btn btn-primary" id="btn-save-criteria">
+                  <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"/></svg>
+                  Save
+                </button>
+              </div>
+            </div>
+            <div class="json-preview-pane" id="json-preview-pane">
+{
+  "study_types": [],
+  "inclusion_keywords": { "logic": "ANY", "terms": [], "fields": ["title","abstract"] },
+  "exclusion_keywords": { "logic": "ANY", "terms": [], "fields": ["title","abstract"] },
+  "custom_rules": [],
+  "pico": { "P": "", "I": "", "C": "", "O": "" }
+}</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== TAB: UPLOAD & SCREEN ===== -->
+      <div id="tab-upload" class="tab-panel">
+        <div class="page-header">
+          <h1>Upload &amp; Screen</h1>
+          <p>Drop your bibliographic files below and let the AI screen them against your criteria.</p>
+        </div>
+
+        <!-- Dropzone -->
+        <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="Drop zone for bibliographic files">
+          <div class="dropzone-icon">
+            <svg width="48" height="48" fill="none" viewBox="0 0 24 24" stroke="var(--accent-teal)" stroke-width="1.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+            </svg>
+          </div>
+          <p class="dropzone-label">Drag &amp; drop files here, or <span class="dropzone-browse" id="dropzone-browse">browse</span></p>
+          <p class="dropzone-sublabel">Supported: <code>.bib</code> <code>.ris</code> <code>.csv</code></p>
+          <input type="file" id="file-input" accept=".bib,.ris,.csv" hidden />
+        </div>
+
+        <!-- Pre-screening summary (hidden until file parsed) -->
+        <div class="glass-card prescan-card" id="prescan-card" hidden>
+          <div class="prescan-grid" id="prescan-grid"></div>
+          <div class="prescan-actions">
+            <button class="btn btn-violet btn-lg" id="btn-begin-screening" disabled>
+              <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              Begin Screening
+            </button>
+            <button class="btn btn-secondary" id="btn-clear-file">Clear File</button>
+          </div>
+        </div>
+
+        <!-- Screening Feed (hidden until screening starts) -->
+        <div class="screening-feed" id="screening-feed" hidden>
+          <!-- Progress bar -->
+          <div class="glass-card">
+            <div class="screening-header">
+              <span class="screening-status-text" id="screening-status-text">Screening in Progress</span>
+              <span class="screening-counter mono" id="screening-counter">0 / 0</span>
+              <span class="screening-eta" id="screening-eta"></span>
+              <div class="screening-controls">
+                <button class="btn btn-secondary" id="btn-pause">Pause</button>
+                <button class="btn btn-danger" id="btn-abort">Abort</button>
+              </div>
+            </div>
+            <div class="progress-wrap" style="margin-top:var(--space-4)">
+              <div class="progress-fill processing" id="screening-progress"></div>
+            </div>
+          </div>
+
+          <!-- Current article card -->
+          <div class="glass-card current-article-card" id="current-article-card">
+            <div class="article-index-badge" id="article-index-badge">Now Screening #1</div>
+            <div class="article-title" id="article-title">—</div>
+            <div class="article-meta" id="article-meta"></div>
+            <div class="ai-reasoning-block">
+              <div class="ai-reasoning-label">
+                <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+                AI Reasoning
+              </div>
+              <div class="ai-reasoning-text" id="ai-reasoning-text"><span class="typewriter-cursor"></span></div>
+            </div>
+            <div class="decision-display" id="decision-display"></div>
+          </div>
+
+          <!-- Recent decisions -->
+          <div class="recent-decisions">
+            <h3>Recent Decisions</h3>
+            <div id="recent-decisions-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== TAB: RESULTS ===== -->
+      <div id="tab-results" class="tab-panel">
+        <div class="page-header">
+          <h1>Results</h1>
+          <p>Screen outcomes from the most recent session. Filter, review, override, and export.</p>
+        </div>
+        <div id="results-content">
+          <div class="empty-state">
+            <svg width="64" height="64" fill="none" viewBox="0 0 24 24" stroke="var(--text-muted)"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+            <p>No results yet. Run a screening session first.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== TAB: REASONING LOG (AUDIT) ===== -->
+      <div id="tab-audit" class="tab-panel">
+        <div class="page-header">
+          <h1>Reasoning Log</h1>
+          <p>Full audit trail of every AI decision — prompts, responses, confidence, and latency.</p>
+        </div>
+        <div id="audit-content">
+          <div class="empty-state">
+            <svg width="64" height="64" fill="none" viewBox="0 0 24 24" stroke="var(--text-muted)"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z"/></svg>
+            <p>No audit data. Run a screening session to view the reasoning log.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== TAB: SETTINGS ===== -->
+      <div id="tab-settings" class="tab-panel">
+        <div class="page-header">
+          <h1>Settings</h1>
+          <p>Configure your API key, model selection, screening parameters, and manage session history.</p>
+        </div>
+        <div class="settings-layout" id="settings-layout">
+          <!-- Rendered by settings.js -->
+        </div>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- GLOBAL TOAST CONTAINER -->
+  <div id="toast-container" aria-live="polite"></div>
+
+  <!-- SCRIPTS (deferred module) -->
+  <script type="module" src="js/app.js"></script>
+</body>
+</html>

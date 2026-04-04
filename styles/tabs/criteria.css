@@ -1,0 +1,344 @@
+/* =============================================
+   SRScreen — Criteria Builder Tab Styles
+   Tag inputs, study type chips, rules engine,
+   PICO block, live JSON preview
+   ============================================= */
+
+/* ---- Two-column layout ---- */
+.criteria-layout {
+  display: grid;
+  grid-template-columns: 1fr 380px;
+  gap: var(--space-6);
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .criteria-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- Builder panels ---- */
+.criteria-panels {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+/* ---- Section Card ---- */
+.criteria-section {
+  padding: var(--space-5);
+}
+.criteria-section h3 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+.criteria-section h3 .section-icon {
+  width: 20px;
+  height: 20px;
+  opacity: 0.7;
+}
+
+/* ---- Study Type Chips ---- */
+.study-type-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.study-chip {
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-subtle);
+  background: transparent;
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.78rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-smooth);
+  user-select: none;
+}
+.study-chip:hover {
+  background: rgba(255,255,255,0.04);
+  color: var(--text-primary);
+}
+.study-chip.active {
+  background: rgba(0, 229, 180, 0.1);
+  border-color: rgba(0, 229, 180, 0.3);
+  color: var(--accent-teal);
+  box-shadow: var(--glow-teal);
+}
+
+/* ---- Tag Input Component ---- */
+.tag-input-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.tag-input-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.tag-input-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+.tag-input-field input {
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  background: rgba(4,5,8,0.5);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.82rem;
+  outline: none;
+  transition: border-color var(--duration-fast);
+}
+.tag-input-field input:focus {
+  border-color: var(--accent-teal);
+}
+.tag-input-field input::placeholder {
+  color: var(--text-muted);
+}
+
+.tag-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  min-height: 32px;
+}
+
+.tag-list:empty::after {
+  content: 'No keywords added yet';
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-style: italic;
+}
+
+/* ---- Field Scope Dropdown ---- */
+.field-scope {
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-void);
+  color: var(--text-secondary);
+  font-family: inherit;
+  font-size: 0.72rem;
+  cursor: pointer;
+  outline: none;
+  appearance: none;
+  transition: border-color var(--duration-fast);
+}
+.field-scope:focus {
+  border-color: var(--accent-teal);
+}
+
+/* ---- Boolean Logic Toggle ---- */
+.logic-toggle-wrap {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.logic-label {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* ---- Custom Rules Engine ---- */
+.rules-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.rule-card {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  font-size: 0.78rem;
+  transition: all var(--duration-fast) var(--ease-smooth);
+  cursor: grab;
+}
+.rule-card:hover {
+  border-color: rgba(255,255,255,0.1);
+}
+.rule-card.dragging {
+  opacity: 0.5;
+  transform: scale(0.98);
+}
+
+.rule-drag-handle {
+  cursor: grab;
+  color: var(--text-muted);
+  display: flex;
+  align-items: center;
+}
+
+.rule-text {
+  flex: 1;
+  color: var(--text-secondary);
+}
+.rule-text .rule-keyword {
+  color: var(--accent-violet);
+  font-weight: 600;
+}
+.rule-text .rule-action-include {
+  color: var(--accent-teal);
+  font-weight: 600;
+}
+.rule-text .rule-action-exclude {
+  color: var(--accent-crimson);
+  font-weight: 600;
+}
+
+.add-rule-form {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-3);
+  background: var(--bg-void);
+  border: 1px dashed var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+.add-rule-form select,
+.add-rule-form input {
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-surface);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: inherit;
+  font-size: 0.78rem;
+  outline: none;
+}
+
+@media (max-width: 600px) {
+  .add-rule-form {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---- PICO Block ---- */
+.pico-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+}
+@media (max-width: 600px) {
+  .pico-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.pico-field label {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  margin-bottom: var(--space-2);
+}
+.pico-letter {
+  width: 22px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: 'Syne', sans-serif;
+  font-weight: 800;
+  font-size: 0.7rem;
+}
+.pico-P { background: rgba(0,229,180,0.12); color: var(--accent-teal); }
+.pico-I { background: rgba(124,92,252,0.12); color: var(--accent-violet); }
+.pico-C { background: rgba(245,166,35,0.12); color: var(--accent-amber); }
+.pico-O { background: rgba(168,216,234,0.12); color: var(--accent-ice); }
+
+/* ---- Live JSON Preview ---- */
+.json-preview-card {
+  position: sticky;
+  top: var(--space-4);
+}
+
+.json-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
+}
+.json-preview-header h3 {
+  margin-bottom: 0;
+}
+
+.json-preview-pane {
+  background: var(--bg-void);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--space-4);
+  max-height: 500px;
+  overflow: auto;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  line-height: 1.8;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* Syntax highlight tokens */
+.json-key   { color: var(--accent-teal); }
+.json-str   { color: var(--accent-amber); }
+.json-num   { color: var(--accent-violet); }
+.json-bool  { color: var(--accent-crimson); }
+.json-null  { color: var(--text-muted); }
+.json-punct { color: var(--text-muted); }
+
+/* ---- Criteria Actions ---- */
+.criteria-actions {
+  display: flex;
+  gap: var(--space-3);
+  flex-wrap: wrap;
+  margin-top: var(--space-4);
+}
+
+/* ---- Collapsible section ---- */
+.collapsible-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  padding: var(--space-3) 0;
+  user-select: none;
+}
+.collapsible-header .chevron {
+  transition: transform var(--duration-fast) var(--ease-smooth);
+}
+.collapsible-header.open .chevron {
+  transform: rotate(180deg);
+}
+.collapsible-body {
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height var(--duration-med) var(--ease-smooth);
+}
+.collapsible-body.open {
+  max-height: 600px;
+}

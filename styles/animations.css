@@ -1,0 +1,225 @@
+/* =============================================
+   SRScreen — Animation System
+   All @keyframes, transitions, entry effects
+   ============================================= */
+
+/* ==============================
+   CORE KEYFRAMES
+   ============================== */
+
+/* Fade + Slide (tab transitions, card entries) */
+@keyframes fadeSlideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeSlideDown {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeSlideLeft {
+  from { opacity: 0; transform: translateX(20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+@keyframes fadeSlideRight {
+  from { opacity: 0; transform: translateX(-20px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+/* Pure fade */
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@keyframes fadeOut {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+/* Scale in (logo, badges) */
+@keyframes scaleIn {
+  from { opacity: 0; transform: scale(0.8); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@keyframes scaleSpring {
+  from { transform: scale(0); }
+  50%  { transform: scale(1.1); }
+  to   { transform: scale(1); }
+}
+
+/* Decision badge pop */
+@keyframes decisionPop {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.15); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* Pulse dot (status indicators) */
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(0.7); }
+}
+
+/* Pulse glow (active element borders) */
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 8px rgba(0, 229, 180, 0.2); }
+  50%      { box-shadow: 0 0 20px rgba(0, 229, 180, 0.4); }
+}
+
+/* Progress bar shimmer */
+@keyframes shimmer-slide {
+  0%   { background-position: 200% center; }
+  100% { background-position: -200% center; }
+}
+
+/* Toast notifications */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateX(40px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+@keyframes toast-out {
+  from {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateX(40px) scale(0.95);
+  }
+}
+
+/* Tag chip entry */
+@keyframes tag-in {
+  from {
+    opacity: 0;
+    transform: scale(0.7) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+/* Row slide in (staggerable via animation-delay) */
+@keyframes slideInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Typewriter cursor blink */
+@keyframes cursor-blink {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: 0; }
+}
+
+/* PRISMA arrow draw (stroke-dashoffset) */
+@keyframes drawLine {
+  from { stroke-dashoffset: var(--dash-length, 100); }
+  to   { stroke-dashoffset: 0; }
+}
+
+/* Donut arc draw (used in Canvas but CSS fallback for SVG) */
+@keyframes donutDraw {
+  from { stroke-dasharray: 0 339.3; }
+  to   { stroke-dasharray: var(--target-dash) 339.3; }
+}
+
+/* Rotating loader */
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+/* Subtle float (for hero elements) */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50%      { transform: translateY(-6px); }
+}
+
+/* Glow border cycle */
+@keyframes borderGlow {
+  0%   { border-color: rgba(0, 229, 180, 0.3); }
+  50%  { border-color: rgba(124, 92, 252, 0.3); }
+  100% { border-color: rgba(0, 229, 180, 0.3); }
+}
+
+/* Grid mesh movement (dashboard hero background) */
+@keyframes gridDrift {
+  0%   { background-position: 0 0; }
+  100% { background-position: 40px 40px; }
+}
+
+/* ==============================
+   ANIMATION UTILITY CLASSES
+   ============================== */
+.anim-fade-slide-up {
+  animation: fadeSlideUp var(--duration-med) var(--ease-snappy) forwards;
+  opacity: 0;
+}
+.anim-fade-slide-left {
+  animation: fadeSlideLeft var(--duration-med) var(--ease-snappy) forwards;
+  opacity: 0;
+}
+.anim-fade-in {
+  animation: fadeIn var(--duration-med) var(--ease-smooth) forwards;
+  opacity: 0;
+}
+.anim-scale-in {
+  animation: scaleIn var(--duration-med) var(--ease-spring) forwards;
+  opacity: 0;
+}
+
+/* Staggerable — apply via JS: element.style.animationDelay = `${i * 60}ms` */
+.anim-stagger {
+  animation: slideInUp var(--duration-med) var(--ease-snappy) forwards;
+  opacity: 0;
+}
+
+/* Spinner */
+.spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid var(--border-subtle);
+  border-top-color: var(--accent-teal);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+}
+.spinner.sm { width: 14px; height: 14px; border-width: 1.5px; }
+.spinner.lg { width: 28px; height: 28px; border-width: 3px; }
+
+/* Typewriter cursor */
+.typewriter-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--accent-violet);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: cursor-blink 1s step-end infinite;
+}
+
+/* Active screening glow border */
+.screening-active-glow {
+  animation: borderGlow 3s ease-in-out infinite;
+}
+
+/* Grid mesh background */
+.grid-mesh {
+  background-image:
+    linear-gradient(rgba(255,255,255,0.02) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255,255,255,0.02) 1px, transparent 1px);
+  background-size: 40px 40px;
+  animation: gridDrift 120s linear infinite;
+}

@@ -1,0 +1,208 @@
+/* =============================================
+   SRScreen — Design Tokens & Base Reset
+   "Scientific Noir" Design System v1.0
+   ============================================= */
+
+/* ---- Custom Properties ---- */
+:root {
+  /* === BACKGROUNDS === */
+  --bg-void:        #040508;
+  --bg-base:        #080b12;
+  --bg-surface:     #0e1420;
+  --bg-elevated:    #141c2e;
+  --bg-glass:       rgba(14, 20, 32, 0.7);
+
+  /* === ACCENTS === */
+  --accent-teal:    #00e5b4;
+  --accent-amber:   #f5a623;
+  --accent-crimson: #ff4757;
+  --accent-violet:  #7c5cfc;
+  --accent-ice:     #a8d8ea;
+
+  /* === TEXT === */
+  --text-primary:   #e8edf5;
+  --text-secondary: #7a8aa0;
+  --text-muted:     #3d4f63;
+  --text-inverse:   #040508;
+
+  /* === BORDERS & GLOWS === */
+  --border-subtle:  rgba(255,255,255,0.06);
+  --border-active:  rgba(0, 229, 180, 0.4);
+  --glow-teal:      0 0 20px rgba(0, 229, 180, 0.25);
+  --glow-violet:    0 0 20px rgba(124, 92, 252, 0.3);
+  --glow-amber:     0 0 20px rgba(245, 166, 35, 0.25);
+  --glow-crimson:   0 0 20px rgba(255, 71, 87, 0.25);
+
+  /* === GRADIENTS === */
+  --grad-teal:      linear-gradient(135deg, #00e5b4, #00b894);
+  --grad-violet:    linear-gradient(135deg, #7c5cfc, #a78bfa);
+  --grad-crimson:   linear-gradient(135deg, #ff4757, #ff6b81);
+  --grad-amber:     linear-gradient(135deg, #f5a623, #f97316);
+  --grad-hero:      linear-gradient(135deg, #00e5b4 0%, #7c5cfc 50%, #ff4757 100%);
+  --grad-surface:   linear-gradient(180deg, rgba(14,20,32,0.9) 0%, rgba(8,11,18,0.95) 100%);
+
+  /* === SPACING SCALE (8px base) === */
+  --space-1: 4px;   --space-2: 8px;   --space-3: 12px;  --space-4: 16px;
+  --space-5: 20px;  --space-6: 24px;  --space-8: 32px;  --space-10: 40px;
+  --space-12: 48px; --space-16: 64px; --space-24: 96px;
+
+  /* === RADIUS === */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-full: 9999px;
+
+  /* === ANIMATION CURVES === */
+  --ease-snappy:  cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-spring:  cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-smooth:  cubic-bezier(0.4, 0, 0.2, 1);
+  --duration-fast: 150ms;
+  --duration-med:  300ms;
+  --duration-slow: 600ms;
+
+  /* === LAYOUT === */
+  --sidebar-w: 260px;
+  --sidebar-w-collapsed: 0px;
+  --topbar-h: 0px; /* No separate topbar — sidebar handles navigation */
+
+  /* === SHADOWS === */
+  --shadow-card: 0 4px 24px rgba(0,0,0,0.5), 0 0 24px rgba(0,229,180,0.04);
+  --shadow-elevated: 0 8px 32px rgba(0,0,0,0.6), 0 0 32px rgba(124,92,252,0.06);
+}
+
+/* ---- Reset & Base ---- */
+*, *::before, *::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  scroll-behavior: smooth;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  min-height: 100vh;
+  display: flex;
+  overflow-x: hidden;
+  line-height: 1.6;
+
+  /* Subtle radial ambient glow */
+  background-image:
+    radial-gradient(ellipse at 10% 20%, rgba(0,229,180,0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at 90% 80%, rgba(124,92,252,0.03) 0%, transparent 50%),
+    radial-gradient(ellipse at 50% 50%, rgba(168,216,234,0.015) 0%, transparent 60%);
+}
+
+/* ---- Typography ---- */
+h1, h2, h3, h4, h5, h6 {
+  font-family: 'Syne', 'DM Sans', system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+  color: var(--text-primary);
+}
+
+h1 {
+  font-size: 1.75rem;
+  font-weight: 800;
+  background: var(--grad-hero);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+h2 {
+  font-size: 1.35rem;
+  font-weight: 700;
+}
+
+h3 {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-bottom: var(--space-4);
+}
+
+p {
+  color: var(--text-secondary);
+  line-height: 1.7;
+  font-size: 0.875rem;
+}
+
+small {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+}
+
+code {
+  font-family: 'JetBrains Mono', 'Fira Code', monospace;
+  background: rgba(124,92,252,0.12);
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 0.8em;
+  color: var(--accent-violet);
+}
+
+a {
+  color: var(--accent-teal);
+  text-decoration: none;
+  transition: color var(--duration-fast) var(--ease-smooth);
+}
+a:hover {
+  color: #33f0ca;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+strong { font-weight: 600; }
+
+/* ---- Scrollbar ---- */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(122, 138, 160, 0.25);
+  border-radius: var(--radius-full);
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(122, 138, 160, 0.45);
+}
+
+/* ---- Selection ---- */
+::selection {
+  background: rgba(0, 229, 180, 0.2);
+  color: var(--text-primary);
+}
+
+/* ---- Focus Visible ---- */
+:focus-visible {
+  outline: 2px solid var(--accent-teal);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+/* ---- Reduced Motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ---- Data / Monospace Numbers ---- */
+.mono {
+  font-family: 'JetBrains Mono', monospace;
+  font-variant-numeric: tabular-nums;
+}
