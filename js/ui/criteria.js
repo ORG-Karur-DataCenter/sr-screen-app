@@ -4,6 +4,8 @@
    custom rules, PICO, live preview
    ============================================= */
 
+import { getApiKeys, getSelectedModel } from './settings.js';
+
 let _criteria = getDefaultCriteria();
 let _toast = null;
 let initialized = false;
@@ -74,6 +76,22 @@ function buildPanelsHTML() {
   const STUDY_TYPES = ['RCT', 'Cohort', 'Case-Control', 'Cross-sectional', 'Systematic Review', 'Case Report', 'Case Series', 'All'];
 
   return `
+    <!-- AI Auto-fill Template -->
+    <div class="glass-card criteria-section">
+      <h3>
+        <svg class="section-icon" width="18" height="18" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+        AI Auto-Fill (Optional)
+      </h3>
+      <div style="margin-bottom: var(--space-3)">
+        <p style="font-size: 0.85rem; color: var(--text-secondary); margin-bottom: var(--space-2)">Paste your inclusion/exclusion criteria or review protocol below. AI will parse it and auto-fill the sections.</p>
+        <textarea id="ai-criteria-template" class="form-input" rows="3" placeholder="e.g. Include randomized controlled trials involving adult patients with hypertension treated with ACE inhibitors. Exclude animal studies."></textarea>
+      </div>
+      <div style="display: flex; gap: var(--space-3); align-items: center;">
+        <button class="btn btn-primary" id="btn-ai-parse" style="padding:var(--space-2) var(--space-3)">✨ Auto-Fill</button>
+        <span id="ai-parse-status" style="font-size: 0.85rem; color: var(--text-secondary);"></span>
+      </div>
+    </div>
+
     <!-- Study Type Selector -->
     <div class="glass-card criteria-section">
       <h3>
@@ -196,6 +214,84 @@ function rebuildPanels(container) {
 /* ─── Wire Events ──────────────────────────── */
 
 function wireEvents(container) {
+  // AI Auto Parse
+  const btnAiParse = container.querySelector('#btn-ai-parse');
+  if (btnAiParse) {
+    btnAiParse.addEventListener('click', async () => {
+      const textBox = container.querySelector('#ai-criteria-template');
+      const text = textBox.value.trim();
+      if (!text) { if (_toast) _toast('Please enter a protocol or criteria template text.', 'warn'); return; }
+
+      const keys = getApiKeys();
+      if (keys.length === 0) { if (_toast) _toast('No API keys configured. Go to Settings first.', 'error'); return; }
+
+      const model = getSelectedModel();
+      const statusEl = container.querySelector('#ai-parse-status');
+      
+      btnAiParse.disabled = true;
+      statusEl.textContent = 'Parsing with AI...';
+
+      const prompt = `You are a systematic review criteria parsing assistant.
+Extract the inclusion/exclusion criteria, study types, and PICO format from the following text and return ONLY valid JSON matching this exact structure:
+{
+  "study_types": ["RCT", "Cohort", "Case-Control", "Cross-sectional", "Systematic Review", "Case Report", "Case Series", "All"],
+  "inclusion_keywords": { "logic": "ANY", "terms": ["keyword1", "keyword2"] },
+  "exclusion_keywords": { "logic": "ANY", "terms": ["keyword3"] },
+  "pico": { "P": "population desc", "I": "intervention desc", "C": "comparator desc", "O": "outcomes desc" }
+}
+TEXT:
+${text}`;
+
+      let success = false;
+      for (const key of keys) {
+        try {
+          const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+          const resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ role: 'user', parts: [{ text: prompt }] }],
+              generationConfig: { temperature: 0.1 }
+            })
+          });
+
+          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          const data = await resp.json();
+          const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+          let clean = rawText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+          
+          const jsonMatch = clean.match(/\{[\s\S]*\}/);
+          if (!jsonMatch) throw new Error('No JSON found');
+          
+          const parsed = JSON.parse(jsonMatch[0]);
+
+          _criteria = { ...getDefaultCriteria(), ...parsed };
+          _criteria.custom_rules = []; // Reset custom rules
+          
+          rebuildPanels(container);
+          if (_toast) _toast('✅ Criteria auto-filled via AI!', 'success');
+          
+          container.querySelector('#ai-criteria-template').value = text;
+          success = true;
+          break;
+        } catch (err) {
+          console.error('AI Parse error:', err);
+        }
+      }
+
+      if (!success) {
+        statusEl.textContent = 'Parsing failed.';
+        if (_toast) _toast('❌ Failed to parse criteria with configured API keys.', 'error');
+      } else {
+        statusEl.textContent = '';
+      }
+      
+      // We must re-select the button because rebuildPanels destroys it
+      const newBtn = container.querySelector('#btn-ai-parse');
+      if (newBtn) newBtn.disabled = false;
+    });
+  }
+
   // Study type chips
   container.querySelectorAll('.study-chip').forEach(chip => {
     chip.addEventListener('click', () => {

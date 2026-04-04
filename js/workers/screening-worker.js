@@ -59,12 +59,14 @@ async function runScreening({ articles, criteria, apiKeys, model, config }) {
 
     const article = articles[i];
     let result = null;
-    let retries = config.retryLimit || 3;
+    let retries = (config.retryLimit || 3) + apiKeys.length * 2;
+    let keysExhaustedCycle = 0;
 
     while (retries > 0) {
       try {
         const apiKey = apiKeys[currentKeyIndex];
         result = await screenArticle(article, criteria, apiKey, model, config);
+        keysExhaustedCycle = 0; // Reset on success
         break;
       } catch (err) {
         retries--;
@@ -73,8 +75,14 @@ async function runScreening({ articles, criteria, apiKeys, model, config }) {
         let keySwitched = false;
         if (isRateLimit && apiKeys.length > 1) {
           currentKeyIndex = (currentKeyIndex + 1) % apiKeys.length;
-          retries++; // Don't count as a retry if we are just switching keys
+          keysExhaustedCycle++;
           keySwitched = true;
+
+          // If we've looped through all keys and they are ALL rate limited
+          if (keysExhaustedCycle >= apiKeys.length) {
+            keysExhaustedCycle = 0;
+            keySwitched = false; // Let the heavy back-off sleep trigger below
+          }
         }
 
         self.postMessage({
@@ -89,10 +97,12 @@ async function runScreening({ articles, criteria, apiKeys, model, config }) {
         });
 
         if (isRateLimit && !keySwitched) {
-          // Back off 5 seconds on rate limit if we can't switch keys
-          await sleep(5000);
+          // Back off 10 seconds if we hit limit and can't switch/exhausted all keys
+          await sleep(10000);
         } else if (retries > 0 && !keySwitched) {
-          await sleep(1000);
+          await sleep(2000);
+        } else if (keySwitched) {
+          await sleep(250); // Small pause during key rotation
         }
       }
     }
