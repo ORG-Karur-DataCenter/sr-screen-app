@@ -499,10 +499,10 @@ Non-bone: Synovial, Tenosynovial</pre>
             <div class="input-group" style="min-width:190px;max-width:220px">
               <label class="input-label">Model</label>
               <select class="input" id="model-select">
-                <option value="gemini-2.5-flash-preview-04-17">gemini-2.5-flash (Latest)</option>
-                <option value="gemini-2.5-pro-preview-03-25">gemini-2.5-pro (Latest)</option>
-                <option value="gemini-2.0-flash">gemini-2.0-flash</option>
-                <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite (Fast)</option>
+                <option value="gemini-2.0-flash">gemini-2.0-flash ✅ Recommended</option>
+                <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite (Faster)</option>
+                <option value="gemini-2.5-flash-preview-04-17">gemini-2.5-flash-preview (Smarter, lower RPM)</option>
+                <option value="gemini-2.5-pro-preview-03-25">gemini-2.5-pro-preview (Best, 5 RPM only)</option>
               </select>
             </div>
             <button class="btn btn-ghost" id="save-key-btn" style="margin-top:19px">Save</button>
@@ -617,10 +617,10 @@ Non-bone: Synovial, Tenosynovial</pre>
           <div class="input-group">
             <label class="input-label">Default Model</label>
             <select class="input" id="settings-model">
-              <option value="gemini-2.5-flash-preview-04-17">gemini-2.5-flash (Latest, Recommended)</option>
-              <option value="gemini-2.5-pro-preview-03-25">gemini-2.5-pro (Latest, Most Capable)</option>
-              <option value="gemini-2.0-flash">gemini-2.0-flash</option>
-              <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite (Fast)</option>
+              <option value="gemini-2.0-flash">gemini-2.0-flash ✅ Recommended (15 RPM free)</option>
+              <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite (Faster, lower cost)</option>
+              <option value="gemini-2.5-flash-preview-04-17">gemini-2.5-flash-preview (Smarter, 10 RPM)</option>
+              <option value="gemini-2.5-pro-preview-03-25">gemini-2.5-pro-preview (Best quality, 5 RPM only)</option>
             </select>
           </div>
         </div>
@@ -693,7 +693,7 @@ const LS = {
 };
 const getKey=()=>LS.get('sr_key','');
 const setKey=(v)=>LS.set('sr_key',v);
-const getModel=()=>LS.get('sr_model','gemini-2.5-flash');
+const getModel=()=>LS.get('sr_model','gemini-2.0-flash');
 const setModel=(v)=>LS.set('sr_model',v);
 const getCrit=()=>LS.get('sr_criteria','');
 const setCrit=(v)=>LS.set('sr_criteria',v);
@@ -842,34 +842,79 @@ function autoparse(filename,text){
 
 // ══════════════════════════════════════════════════════════
 // GEMINI API — Dual-Pass Screening Engine
+// Pacing matches extraction agent: 4-5s between calls, long waits on 429
 // ══════════════════════════════════════════════════════════
-// Retry with exponential backoff — handles high-demand / rate-limit errors
-async function callGeminiWithRetry(prompt,key,model,temp,maxRetries=5){
+async function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
+
+// Track last request time for global rate-limiter
+let _lastCallTime=0;
+const MIN_GAP_MS=4200; // ~14 RPM — safe for gemini-2.0-flash free tier (15 RPM)
+
+async function callGeminiWithRetry(prompt,key,model,temp){
   const url=`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+  const retryWaits=[10000,30000,60000,90000,120000]; // 10s,30s,1m,1.5m,2m
   let lastErr;
-  for(let attempt=0;attempt<maxRetries;attempt++){
+
+  for(let attempt=0;attempt<retryWaits.length+1;attempt++){
+    if(S.aborted)throw new Error('Aborted');
+
+    // Global rate limiter — ensure minimum gap between API calls
+    const now=Date.now();
+    const sinceLastCall=now-_lastCallTime;
+    if(sinceLastCall<MIN_GAP_MS)await sleep(MIN_GAP_MS-sinceLastCall);
+
     try{
-      if(attempt>0){
-        const wait=Math.pow(2,attempt)*2000+Math.random()*1000; // 4s,8s,16s,32s backoff
-        toast(`⏳ API busy — retrying batch in ${Math.round(wait/1000)}s (attempt ${attempt+1}/${maxRetries})…`,'warning',wait+500);
-        await sleep(wait);
-      }
-      const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:parseFloat(temp),maxOutputTokens:8192}})});
+      _lastCallTime=Date.now();
+      const r=await fetch(url,{
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({
+          contents:[{parts:[{text:prompt}]}],
+          generationConfig:{temperature:parseFloat(temp),maxOutputTokens:8192}
+        })
+      });
+
+      // Rate-limit or overload — respect Retry-After if present
       if(r.status===429||r.status===503){
         const e=await r.json().catch(()=>({}));
-        lastErr=new Error(e.error?.message||`Status ${r.status} — high demand`);
-        continue; // retry
+        const errMsg=e.error?.message||`Status ${r.status}`;
+        // Check for Retry-After header
+        const retryAfter=parseInt(r.headers.get('Retry-After')||'0')*1000;
+        const wait=retryAfter||retryWaits[Math.min(attempt,retryWaits.length-1)];
+        lastErr=new Error(errMsg);
+        if(attempt<retryWaits.length){
+          toast(`⏳ API busy — waiting ${Math.round(wait/1000)}s then retrying (${attempt+1}/${retryWaits.length})…`,'warning',wait+500);
+          await sleep(wait);
+          continue;
+        }
+        break;
       }
-      if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`API error ${r.status}`)}
+
+      if(!r.ok){
+        const e=await r.json().catch(()=>({}));
+        throw new Error(e.error?.message||`API error ${r.status}`);
+      }
+
       const d=await r.json();
-      return d.candidates?.[0]?.content?.parts?.[0]?.text||'';
+      // Check for blocked/empty response
+      const text=d.candidates?.[0]?.content?.parts?.[0]?.text;
+      if(!text&&d.candidates?.[0]?.finishReason==='OTHER'){
+        throw new Error('Model returned empty — try a different model');
+      }
+      return text||'';
+
     }catch(err){
       if(err.message==='Aborted')throw err;
       lastErr=err;
-      if(attempt<maxRetries-1)continue;
+      // Network error — short wait then retry
+      if(attempt<retryWaits.length&&(err.message.includes('fetch')||err.message.includes('network'))){
+        await sleep(5000);
+        continue;
+      }
+      if(attempt>=retryWaits.length)break;
     }
   }
-  throw lastErr;
+  throw lastErr||new Error('All retries exhausted');
 }
 
 function buildPrompt(arts,criteria){
@@ -903,16 +948,17 @@ function parseGeminiResp(text,arts){
   return arts.map(a=>{const r=map[a.key];return r?{key:a.key,title:a.title,decision:/include/i.test(r.decision)?'Include':'Exclude',reason:r.reason||''}:{key:a.key,title:a.title,decision:'Exclude',reason:'Not returned by API'}});
 }
 
-async function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
-
 async function runDualPass(arts,criteria,key,model,onProg){
-  const bsz=parseInt(getBatch())||10;
+  const bsz=parseInt(getBatch())||5; // Default 5 — less likely to hit token/rate limits
   const temp=parseFloat(getTemp())||0.1;
   const batches=[];
   for(let i=0;i<arts.length;i+=bsz)batches.push(arts.slice(i,i+bsz));
   const n=batches.length;
   const pass1=[],pass2=[];
   let skipped=0;
+  _lastCallTime=0; // Reset rate limiter for fresh run
+
+  toast(`Starting dual-pass screening: ${n} batches of ≤${bsz} articles each…`,'info',5000);
 
   for(let i=0;i<n;i++){
     if(S.aborted)throw new Error('Aborted');
@@ -923,11 +969,9 @@ async function runDualPass(arts,criteria,key,model,onProg){
     }catch(err){
       if(err.message==='Aborted')throw err;
       skipped+=batches[i].length;
-      // Mark batch articles as needs-review so screening continues
-      pass1.push(...batches[i].map(a=>({key:a.key,title:a.title,decision:'Exclude',reason:`Batch skipped after retries: ${err.message.slice(0,80)}`})));
-      toast(`⚠️ Batch ${i+1} failed after retries — marked for review, continuing…`,'warning',6000);
+      pass1.push(...batches[i].map(a=>({key:a.key,title:a.title,decision:'Exclude',reason:`Skipped after retries: ${err.message.slice(0,80)}`})));
+      toast(`⚠️ Batch ${i+1}/${n} failed (${err.message.slice(0,60)}) — marked for review, continuing…`,'warning',7000);
     }
-    if(i<n-1)await sleep(400);
   }
   for(let i=0;i<n;i++){
     if(S.aborted)throw new Error('Aborted');
@@ -937,12 +981,11 @@ async function runDualPass(arts,criteria,key,model,onProg){
       pass2.push(...parseGeminiResp(t,batches[i]));
     }catch(err){
       if(err.message==='Aborted')throw err;
-      pass2.push(...batches[i].map(a=>({key:a.key,title:a.title,decision:'Exclude',reason:`Batch skipped after retries: ${err.message.slice(0,80)}`})));
-      toast(`⚠️ Pass 2 batch ${i+1} failed — marked for review, continuing…`,'warning',6000);
+      pass2.push(...batches[i].map(a=>({key:a.key,title:a.title,decision:'Exclude',reason:`Skipped after retries: ${err.message.slice(0,80)}`})));
+      toast(`⚠️ Pass 2 batch ${i+1}/${n} failed — marked for review, continuing…`,'warning',7000);
     }
-    if(i<n-1)await sleep(400);
   }
-  onProg({lbl:`Comparing passes… (${skipped>0?skipped+' articles skipped due to API limits':''})`,pct:99,p:2,bi:n,bn:n,done:arts.length*2,tot:arts.length*2});
+  onProg({lbl:`Comparing passes…`,pct:99,p:2,bi:n,bn:n,done:arts.length*2,tot:arts.length*2});
 
   const p2m=Object.fromEntries(pass2.map(r=>[r.key,r]));
   const agreed=[],disagreements=[];
@@ -952,7 +995,7 @@ async function runDualPass(arts,criteria,key,model,onProg){
     if(r1.decision===r2.decision)agreed.push({...r1,pass1_reason:r1.reason,pass2_reason:r2.reason});
     else disagreements.push({key:a.key,title:a.title,pass1_decision:r1.decision,pass1_reason:r1.reason,pass2_decision:r2.decision,pass2_reason:r2.reason,final_decision:'FLAGGED_FOR_HUMAN_REVIEW'});
   }
-  if(skipped>0)toast(`ℹ️ ${skipped} articles could not be screened due to API limits — check Flagged section`,'warning',8000);
+  if(skipped>0)toast(`ℹ️ ${skipped} articles skipped due to API limits — check Flagged section`,'warning',8000);
   return{pass1,pass2,agreed,disagreements};
 }
 
