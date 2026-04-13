@@ -550,15 +550,15 @@ Non-bone: Synovial, Tenosynovial</pre>
             <div class="progress-label" id="progress-label">Initializing…</div>
             <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
             <div class="progress-stats">
-              <span id="prog-left">Pass 1 of 2</span>
-              <span id="prog-right">0 / 0</span>
+              <span id="prog-left">Preparing…</span>
+              <span id="prog-right"></span>
             </div>
           </div>
           <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:4px">
             <button class="btn btn-primary btn-lg" id="run-btn">🤖 Run AI Screening</button>
             <button class="btn btn-ghost" id="abort-btn" style="display:none">⛔ Abort</button>
           </div>
-          <div style="margin-top:8px;font-size:11.5px;color:var(--text-3)">Articles are screened in batches. Both independent passes must agree before a decision is finalised.</div>
+          <div style="margin-top:8px;font-size:11.5px;color:var(--text-3)">AI generates a custom screening engine from your criteria in one API call, then screens all articles instantly in your browser.</div>
         </div>
       </div>
     </div>
@@ -941,7 +941,7 @@ function extractJsCode(text) {
 
 async function runDualPass(arts,criteria,key,model,onProg){
   // Generate the logic engine ONCE via the API
-  onProg({lbl:'Step 1: Generating Custom Evaluation Logic via AI...',pct:10,p:1,bi:0,bn:0,done:0,tot:arts.length});
+  onProg({lbl:'🧠 Generating screening logic from your criteria via AI…',pct:5,status:'Sending criteria to Gemini…',detail:''});
 
   let jsCode = "";
   try {
@@ -955,7 +955,7 @@ async function runDualPass(arts,criteria,key,model,onProg){
     throw err;
   }
   
-  onProg({lbl:'Step 2: Compiling Local Rules Engine...',pct:40,p:1,bi:0,bn:0,done:0,tot:arts.length});
+  onProg({lbl:'⚙️ Compiling screening logic in your browser…',pct:30,status:'Building local rules engine…',detail:''});
   
   let evaluateArticle;
   try {
@@ -966,15 +966,21 @@ async function runDualPass(arts,criteria,key,model,onProg){
     throw new Error('AI generated invalid Javascript logic.');
   }
   
-  onProg({lbl:'Step 3: Executing Screening Natively Natively...',pct:60,p:1,bi:0,bn:0,done:0,tot:arts.length});
+  onProg({lbl:'🔍 Applying screening logic to articles…',pct:35,status:`Screening ${arts.length} articles locally…`,detail:`0 / ${arts.length}`});
   
-  await sleep(300); // Visual pause for UX
+  await sleep(200);
   
   const pass1=[], pass2=[], agreed=[], disagreements=[];
   
-  // Natively evaluate every article offline
   for(let i=0; i<arts.length; i++) {
     if(S.aborted) throw new Error('Aborted');
+    
+    // Update progress every article
+    const pct = 35 + Math.round((i / arts.length) * 60);
+    if(i % 5 === 0 || i === arts.length - 1) {
+      onProg({lbl:`🔍 Screening article ${i+1} of ${arts.length}…`,pct:pct,status:`Evaluating: ${(arts[i].title||'').slice(0,60)}…`,detail:`${i+1} / ${arts.length}`});
+    }
+    
     try {
       const res = evaluateArticle(arts[i].title || "", arts[i].abstract || "");
       const finalRes = {
@@ -984,7 +990,6 @@ async function runDualPass(arts,criteria,key,model,onProg){
         reason: res.reason || "Matched logic rules"
       };
       
-      // Since it's offline deterministic matching, both passes are identical
       agreed.push({
         ...finalRes,
         pass1_reason: finalRes.reason,
@@ -1000,9 +1005,14 @@ async function runDualPass(arts,criteria,key,model,onProg){
         final_decision: "FLAGGED_FOR_HUMAN_REVIEW"
       });
     }
+    
+    // Yield to UI thread every 50 articles so progress bar actually updates
+    if(i % 50 === 0) await sleep(0);
   }
 
-  onProg({lbl:'Screening complete. 100% Native.',pct:99,p:2,bi:1,bn:1,done:arts.length,tot:arts.length});
+  const inc = agreed.filter(r => r.decision === 'Include').length;
+  const exc = agreed.filter(r => r.decision === 'Exclude').length;
+  onProg({lbl:`✅ Screening complete — ${inc} included, ${exc} excluded, ${disagreements.length} flagged`,pct:100,status:'Done!',detail:`${arts.length} / ${arts.length}`});
   return{pass1,pass2,agreed,disagreements};
 }
 
@@ -1244,8 +1254,8 @@ async function runScreening(){
       const fe=document.getElementById('progress-fill');const le=document.getElementById('progress-label');
       const pl=document.getElementById('prog-left');const pr=document.getElementById('prog-right');
       if(fe)fe.style.width=prog.pct+'%';if(le)le.textContent=prog.lbl;
-      if(pl)pl.textContent=`Pass ${prog.p}/2 · Batch ${prog.bi}/${prog.bn}`;
-      if(pr)pr.textContent=`${Math.min(prog.done,S.articles.length*2)} / ${S.articles.length*2}`;
+      if(pl)pl.textContent=prog.status||'';
+      if(pr)pr.textContent=prog.detail||'';
     });
 
     S.pass1=pass1;S.pass2=pass2;S.agreed=agreed;S.disagreements=disagreements;
