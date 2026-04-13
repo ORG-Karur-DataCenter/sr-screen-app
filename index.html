@@ -942,8 +942,8 @@ I need you to generate a pure Javascript function body that screens academic art
 ${criteria}
 
 REQUIREMENTS:
-1. Generate ONLY the body of a Javascript function. I will explicitly inject it into \`new Function('title', 'abstract', your_code)\`.
-2. Do not include \`function(...)\` wrappers or markdown blocks in your final raw string if possible, or I will parse it out. Provide the code inside \`\`\`javascript ... \`\`\` blocks.
+1. Generate ONLY the body of a Javascript function. I will explicitly inject it into `new Function('title', 'abstract', your_code)`.
+2. Do not include `function(...)` wrappers or markdown blocks in your final raw string if possible, or I will parse it out. Provide the code inside ```javascript ... ``` blocks.
 3. The function takes two string parameters: \`title\` and \`abstract\`. (They may be empty strings).
 4. Use sophisticated logic patterns:
    - Convert strings to uppercase for robust keyword matching
@@ -977,7 +977,7 @@ async function runDualPass(arts,criteria,key,model,onProg){
     const prompt = buildLogicPrompt(criteria);
     const rawResp = await callGeminiWithRetry(prompt, key, model, 0.1);
     jsCode = extractJsCode(rawResp);
-    console.log("Generated Logic Engine:\\n", jsCode);
+    console.log("Generated Logic Engine:\n", jsCode);
   } catch(err) {
     if(err.message==='Aborted') return null;
     toast(`Strategy Generation Failed: ${err.message}`, 'error', 10000);
@@ -1031,7 +1031,7 @@ async function runDualPass(arts,criteria,key,model,onProg){
     }
   }
 
-  onProg({lbl:\`Screening complete. 100% Native.\`,pct:99,p:2,bi:1,bn:1,done:arts.length,tot:arts.length});
+  onProg({lbl:`Screening complete. 100% Native.`,pct:99,p:2,bi:1,bn:1,done:arts.length,tot:arts.length});
   return{pass1,pass2,agreed,disagreements};
 }
 
