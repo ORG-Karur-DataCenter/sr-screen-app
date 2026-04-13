@@ -855,7 +855,7 @@ let _lastCallTime=0;
 const MIN_GAP_MS=4200; // ~14 RPM — safe for gemini-2.0-flash free tier (15 RPM)
 
 async function callGeminiWithRetry(prompt,key,model,temp){
-  const endpoints = ['v1alpha', 'v1beta', 'v1'];
+  const endpoints = ['v1beta', 'v1alpha', 'v1'];
   let currentEndpointIdx = 0;
   const retryWaits=[10000,30000,60000,90000,120000]; // 10s,30s,1m,1.5m,2m
   let lastErr;
@@ -900,8 +900,8 @@ async function callGeminiWithRetry(prompt,key,model,temp){
         const e=await r.json().catch(()=>({}));
         const errMsg=(e.error?.message||`Status ${r.status}`).toLowerCase();
         
-        // Auto-switch API version if model not found for this version
-        if(r.status===404 && (errMsg.includes('version') || errMsg.includes('not found'))){
+        // Auto-switch API version if model not found for this version (Google often returns HTTP 400 or 404 for this)
+        if(errMsg.includes('version') || errMsg.includes('not found') || errMsg.includes('deprecated')){
           if(currentEndpointIdx < endpoints.length - 1){
             currentEndpointIdx++;
             toast(`⏳ Model needs different API version. Switching to ${endpoints[currentEndpointIdx]}...`,'info',3000);
