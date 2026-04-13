@@ -885,7 +885,7 @@ function parseGeminiResp(text,arts){
 async function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
 
 async function runDualPass(arts,criteria,key,model,onProg){
-  const bsz=parseInt(getBatchSize())||10;
+  const bsz=parseInt(getBatch())||10;
   const temp=parseFloat(getTemp())||0.1;
   const batches=[];
   for(let i=0;i<arts.length;i+=bsz)batches.push(arts.slice(i,i+bsz));
@@ -918,9 +918,6 @@ async function runDualPass(arts,criteria,key,model,onProg){
   }
   return{pass1,pass2,agreed,disagreements};
 }
-
-function getBatchSize(){return LS.get('sr_batch',10)}
-function getTemp(){return LS.get('sr_temp',0.1)}
 
 // ══════════════════════════════════════════════════════════
 // UI RENDERERS
@@ -1083,7 +1080,7 @@ function syncUploadKey(){
 function loadSettings(){
   const f=(id,v)=>{const el=document.getElementById(id);if(el)el.value=v};
   f('settings-api-key',getKey());f('settings-model',getModel());
-  f('settings-batch',getBatchSize());f('settings-temp',getTemp());
+  f('settings-batch',getBatch());f('settings-temp',getTemp());
 }
 
 // ── FILE UPLOAD ─────────────────────────────────────────────
