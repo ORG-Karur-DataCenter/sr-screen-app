@@ -499,10 +499,10 @@ Non-bone: Synovial, Tenosynovial</pre>
             <div class="input-group" style="min-width:190px;max-width:220px">
               <label class="input-label">Model</label>
               <select class="input" id="model-select">
-                <option value="gemini-2.0-flash">gemini-2.0-flash ✅ Recommended</option>
-                <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite (Faster)</option>
-                <option value="gemini-2.5-flash-preview-04-17">gemini-2.5-flash-preview (Smarter, lower RPM)</option>
-                <option value="gemini-2.5-pro-preview-03-25">gemini-2.5-pro-preview (Best, 5 RPM only)</option>
+                <option value="gemini-2.5-flash">gemini-2.5-flash ✅ Recommended</option>
+                <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+                <option value="gemini-1.5-flash-latest">gemini-1.5-flash-latest</option>
+                <option value="gemini-1.5-pro-latest">gemini-1.5-pro-latest</option>
               </select>
             </div>
             <button class="btn btn-ghost" id="save-key-btn" style="margin-top:19px">Save</button>
@@ -617,10 +617,10 @@ Non-bone: Synovial, Tenosynovial</pre>
           <div class="input-group">
             <label class="input-label">Default Model</label>
             <select class="input" id="settings-model">
-              <option value="gemini-2.0-flash">gemini-2.0-flash ✅ Recommended (15 RPM free)</option>
-              <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite (Faster, lower cost)</option>
-              <option value="gemini-2.5-flash-preview-04-17">gemini-2.5-flash-preview (Smarter, 10 RPM)</option>
-              <option value="gemini-2.5-pro-preview-03-25">gemini-2.5-pro-preview (Best quality, 5 RPM only)</option>
+              <option value="gemini-2.5-flash">gemini-2.5-flash ✅ Recommended</option>
+              <option value="gemini-2.0-flash">gemini-2.0-flash</option>
+              <option value="gemini-1.5-flash-latest">gemini-1.5-flash-latest</option>
+              <option value="gemini-1.5-pro-latest">gemini-1.5-pro-latest</option>
             </select>
           </div>
         </div>
@@ -693,7 +693,11 @@ const LS = {
 };
 const getKey=()=>LS.get('sr_key','');
 const setKey=(v)=>LS.set('sr_key',v);
-const getModel=()=>LS.get('sr_model','gemini-2.0-flash');
+const getModel=()=>{
+  const validModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash-latest', 'gemini-1.5-pro-latest'];
+  const m = LS.get('sr_model','gemini-2.5-flash');
+  return validModels.includes(m) ? m : 'gemini-2.5-flash';
+};
 const setModel=(v)=>LS.set('sr_model',v);
 const getCrit=()=>LS.get('sr_criteria','');
 const setCrit=(v)=>LS.set('sr_criteria',v);
