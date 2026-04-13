@@ -499,9 +499,9 @@ Non-bone: Synovial, Tenosynovial</pre>
             <div class="input-group" style="min-width:190px;max-width:220px">
               <label class="input-label">Model</label>
               <select class="input" id="model-select">
-                <option value="gemini-1.5-flash">gemini-1.5-flash (Fast, Default)</option>
-                <option value="gemini-1.5-pro">gemini-1.5-pro (Accurate but slower)</option>
-                <option value="gemini-1.5-flash-8b">gemini-1.5-flash-8b (Cheapest)</option>
+                <option value="gemini-2.5-flash">gemini-2.5-flash ✅ Latest</option>
+                <option value="gemini-2.0-flash">gemini-2.0-flash (Stable)</option>
+                <option value="gemini-1.5-flash">gemini-1.5-flash (Legacy)</option>
               </select>
             </div>
             <button class="btn btn-ghost" id="save-key-btn" style="margin-top:19px">Save</button>
@@ -616,9 +616,9 @@ Non-bone: Synovial, Tenosynovial</pre>
           <div class="input-group">
             <label class="input-label">Default Model</label>
             <select class="input" id="settings-model">
-              <option value="gemini-1.5-flash">gemini-1.5-flash (Fast, Default)</option>
-              <option value="gemini-1.5-pro">gemini-1.5-pro (Accurate but slower)</option>
-              <option value="gemini-1.5-flash-8b">gemini-1.5-flash-8b (Cheapest)</option>
+              <option value="gemini-2.5-flash">gemini-2.5-flash ✅ Latest</option>
+              <option value="gemini-2.0-flash">gemini-2.0-flash (Stable)</option>
+              <option value="gemini-1.5-flash">gemini-1.5-flash (Legacy)</option>
             </select>
           </div>
         </div>
@@ -692,9 +692,9 @@ const LS = {
 const getKey=()=>LS.get('sr_key','');
 const setKey=(v)=>LS.set('sr_key',v);
 const getModel=()=>{
-  const validModels = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-1.5-flash-8b'];
-  const m = LS.get('sr_model','gemini-1.5-flash');
-  return validModels.includes(m) ? m : 'gemini-1.5-flash';
+  const validModels = ['gemini-2.5-flash', 'gemini-2.0-flash', 'gemini-1.5-flash'];
+  const m = LS.get('sr_model','gemini-2.5-flash');
+  return validModels.includes(m) ? m : 'gemini-2.5-flash';
 };
 const setModel=(v)=>LS.set('sr_model',v);
 const getCrit=()=>LS.get('sr_criteria','');
@@ -853,20 +853,22 @@ let _lastCallTime=0;
 const MIN_GAP_MS=4200; // ~14 RPM — safe for gemini-2.0-flash free tier (15 RPM)
 
 async function callGeminiWithRetry(prompt,key,model,temp){
-  const url=`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+  const endpoints = ['v1alpha', 'v1beta', 'v1'];
+  let currentEndpointIdx = 0;
   const retryWaits=[10000,30000,60000,90000,120000]; // 10s,30s,1m,1.5m,2m
   let lastErr;
 
   for(let attempt=0;attempt<retryWaits.length+1;attempt++){
     if(S.aborted)throw new Error('Aborted');
 
-    // Global rate limiter — ensure minimum gap between API calls
+    // Global rate limiter
     const now=Date.now();
     const sinceLastCall=now-_lastCallTime;
     if(sinceLastCall<MIN_GAP_MS)await sleep(MIN_GAP_MS-sinceLastCall);
 
     try{
       _lastCallTime=Date.now();
+      const url=`https://generativelanguage.googleapis.com/${endpoints[currentEndpointIdx]}/models/${model}:generateContent?key=${key}`;
       const r=await fetch(url,{
         method:'POST',
         headers:{'Content-Type':'application/json'},
@@ -894,6 +896,18 @@ async function callGeminiWithRetry(prompt,key,model,temp){
 
       if(!r.ok){
         const e=await r.json().catch(()=>({}));
+        const errMsg=(e.error?.message||`Status ${r.status}`).toLowerCase();
+        
+        // Auto-switch API version if model not found for this version
+        if(r.status===404 && (errMsg.includes('version') || errMsg.includes('not found'))){
+          if(currentEndpointIdx < endpoints.length - 1){
+            currentEndpointIdx++;
+            toast(`⏳ Model needs different API version. Switching to ${endpoints[currentEndpointIdx]}...`,'info',3000);
+            attempt--; // retry immediately without waiting
+            continue;
+          }
+        }
+        
         throw new Error(e.error?.message||`API error ${r.status}`);
       }
 
