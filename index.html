@@ -499,10 +499,10 @@ Non-bone: Synovial, Tenosynovial</pre>
             <div class="input-group" style="min-width:190px;max-width:220px">
               <label class="input-label">Model</label>
               <select class="input" id="model-select">
-                <option value="gemini-2.5-flash">gemini-2.5-flash</option>
+                <option value="gemini-2.5-flash-preview-04-17">gemini-2.5-flash (Latest)</option>
+                <option value="gemini-2.5-pro-preview-03-25">gemini-2.5-pro (Latest)</option>
                 <option value="gemini-2.0-flash">gemini-2.0-flash</option>
-                <option value="gemini-1.5-flash">gemini-1.5-flash</option>
-                <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+                <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite (Fast)</option>
               </select>
             </div>
             <button class="btn btn-ghost" id="save-key-btn" style="margin-top:19px">Save</button>
@@ -617,10 +617,10 @@ Non-bone: Synovial, Tenosynovial</pre>
           <div class="input-group">
             <label class="input-label">Default Model</label>
             <select class="input" id="settings-model">
-              <option value="gemini-2.5-flash">gemini-2.5-flash (Recommended)</option>
+              <option value="gemini-2.5-flash-preview-04-17">gemini-2.5-flash (Latest, Recommended)</option>
+              <option value="gemini-2.5-pro-preview-03-25">gemini-2.5-pro (Latest, Most Capable)</option>
               <option value="gemini-2.0-flash">gemini-2.0-flash</option>
-              <option value="gemini-1.5-flash">gemini-1.5-flash</option>
-              <option value="gemini-1.5-pro">gemini-1.5-pro</option>
+              <option value="gemini-2.0-flash-lite">gemini-2.0-flash-lite (Fast)</option>
             </select>
           </div>
         </div>
@@ -843,12 +843,33 @@ function autoparse(filename,text){
 // ══════════════════════════════════════════════════════════
 // GEMINI API — Dual-Pass Screening Engine
 // ══════════════════════════════════════════════════════════
-async function callGemini(prompt,key,model,temp){
+// Retry with exponential backoff — handles high-demand / rate-limit errors
+async function callGeminiWithRetry(prompt,key,model,temp,maxRetries=5){
   const url=`https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
-  const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:parseFloat(temp),maxOutputTokens:8192}})});
-  if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`API error ${r.status}`)}
-  const d=await r.json();
-  return d.candidates?.[0]?.content?.parts?.[0]?.text||'';
+  let lastErr;
+  for(let attempt=0;attempt<maxRetries;attempt++){
+    try{
+      if(attempt>0){
+        const wait=Math.pow(2,attempt)*2000+Math.random()*1000; // 4s,8s,16s,32s backoff
+        toast(`⏳ API busy — retrying batch in ${Math.round(wait/1000)}s (attempt ${attempt+1}/${maxRetries})…`,'warning',wait+500);
+        await sleep(wait);
+      }
+      const r=await fetch(url,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({contents:[{parts:[{text:prompt}]}],generationConfig:{temperature:parseFloat(temp),maxOutputTokens:8192}})});
+      if(r.status===429||r.status===503){
+        const e=await r.json().catch(()=>({}));
+        lastErr=new Error(e.error?.message||`Status ${r.status} — high demand`);
+        continue; // retry
+      }
+      if(!r.ok){const e=await r.json().catch(()=>({}));throw new Error(e.error?.message||`API error ${r.status}`)}
+      const d=await r.json();
+      return d.candidates?.[0]?.content?.parts?.[0]?.text||'';
+    }catch(err){
+      if(err.message==='Aborted')throw err;
+      lastErr=err;
+      if(attempt<maxRetries-1)continue;
+    }
+  }
+  throw lastErr;
 }
 
 function buildPrompt(arts,criteria){
@@ -891,22 +912,37 @@ async function runDualPass(arts,criteria,key,model,onProg){
   for(let i=0;i<arts.length;i+=bsz)batches.push(arts.slice(i,i+bsz));
   const n=batches.length;
   const pass1=[],pass2=[];
+  let skipped=0;
 
   for(let i=0;i<n;i++){
     if(S.aborted)throw new Error('Aborted');
     onProg({lbl:`Pass 1: Batch ${i+1}/${n}…`,pct:(i/n)*50,p:1,bi:i+1,bn:n,done:i*bsz,tot:arts.length});
-    const t=await callGemini(buildPrompt(batches[i],criteria),key,model,temp);
-    pass1.push(...parseGeminiResp(t,batches[i]));
-    if(i<n-1)await sleep(350);
+    try{
+      const t=await callGeminiWithRetry(buildPrompt(batches[i],criteria),key,model,temp);
+      pass1.push(...parseGeminiResp(t,batches[i]));
+    }catch(err){
+      if(err.message==='Aborted')throw err;
+      skipped+=batches[i].length;
+      // Mark batch articles as needs-review so screening continues
+      pass1.push(...batches[i].map(a=>({key:a.key,title:a.title,decision:'Exclude',reason:`Batch skipped after retries: ${err.message.slice(0,80)}`})));
+      toast(`⚠️ Batch ${i+1} failed after retries — marked for review, continuing…`,'warning',6000);
+    }
+    if(i<n-1)await sleep(400);
   }
   for(let i=0;i<n;i++){
     if(S.aborted)throw new Error('Aborted');
     onProg({lbl:`Pass 2: Batch ${i+1}/${n}…`,pct:50+(i/n)*48,p:2,bi:i+1,bn:n,done:i*bsz+arts.length,tot:arts.length*2});
-    const t=await callGemini(buildPrompt(batches[i],criteria),key,model,temp);
-    pass2.push(...parseGeminiResp(t,batches[i]));
-    if(i<n-1)await sleep(350);
+    try{
+      const t=await callGeminiWithRetry(buildPrompt(batches[i],criteria),key,model,temp);
+      pass2.push(...parseGeminiResp(t,batches[i]));
+    }catch(err){
+      if(err.message==='Aborted')throw err;
+      pass2.push(...batches[i].map(a=>({key:a.key,title:a.title,decision:'Exclude',reason:`Batch skipped after retries: ${err.message.slice(0,80)}`})));
+      toast(`⚠️ Pass 2 batch ${i+1} failed — marked for review, continuing…`,'warning',6000);
+    }
+    if(i<n-1)await sleep(400);
   }
-  onProg({lbl:'Comparing passes…',pct:99,p:2,bi:n,bn:n,done:arts.length*2,tot:arts.length*2});
+  onProg({lbl:`Comparing passes… (${skipped>0?skipped+' articles skipped due to API limits':''})`,pct:99,p:2,bi:n,bn:n,done:arts.length*2,tot:arts.length*2});
 
   const p2m=Object.fromEntries(pass2.map(r=>[r.key,r]));
   const agreed=[],disagreements=[];
@@ -916,6 +952,7 @@ async function runDualPass(arts,criteria,key,model,onProg){
     if(r1.decision===r2.decision)agreed.push({...r1,pass1_reason:r1.reason,pass2_reason:r2.reason});
     else disagreements.push({key:a.key,title:a.title,pass1_decision:r1.decision,pass1_reason:r1.reason,pass2_decision:r2.decision,pass2_reason:r2.reason,final_decision:'FLAGGED_FOR_HUMAN_REVIEW'});
   }
+  if(skipped>0)toast(`ℹ️ ${skipped} articles could not be screened due to API limits — check Flagged section`,'warning',8000);
   return{pass1,pass2,agreed,disagreements};
 }
 
