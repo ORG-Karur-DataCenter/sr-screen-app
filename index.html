@@ -866,7 +866,7 @@ INSTRUCTIONS:
 ARTICLES TO SCREEN:
 ${arts.map((a,i)=>`[${i+1}]
 key: "${a.key}"
-Title: ${a.title||(no title)}
+Title: ${a.title||'(no title)'}
 Year: ${a.year||'N/A'} | Journal: ${(a.journal||'N/A').slice(0,80)}
 Abstract: ${(a.abstract||'No abstract.').slice(0,550)}`).join('\n\n')}
 
