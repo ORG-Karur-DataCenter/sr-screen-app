@@ -851,88 +851,59 @@ function autoparse(filename,text){
 async function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
 
 // Track last request time for global rate-limiter
-let _lastCallTime=0;
-const MIN_GAP_MS=4200; // ~14 RPM — safe for gemini-2.0-flash free tier (15 RPM)
+// Mirrors generate_screening_code.py:generate_via_api() exactly
+// Model: gemini-2.5-flash | Endpoint: v1beta | Retries: 3 | 429 wait: 15s | Other wait: 5s
+const MAX_RETRIES = 3;
 
-async function callGeminiWithRetry(prompt,key,model,temp){
-  const endpoints = ['v1beta', 'v1alpha', 'v1'];
-  let currentEndpointIdx = 0;
-  const retryWaits=[10000,30000,60000,90000,120000]; // 10s,30s,1m,1.5m,2m
-  let lastErr;
-
-  for(let attempt=0;attempt<retryWaits.length+1;attempt++){
-    if(S.aborted)throw new Error('Aborted');
-
-    // Global rate limiter
-    const now=Date.now();
-    const sinceLastCall=now-_lastCallTime;
-    if(sinceLastCall<MIN_GAP_MS)await sleep(MIN_GAP_MS-sinceLastCall);
-
-    try{
-      _lastCallTime=Date.now();
-      const url=`https://generativelanguage.googleapis.com/${endpoints[currentEndpointIdx]}/models/${model}:generateContent?key=${key}`;
-      const r=await fetch(url,{
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({
-          contents:[{parts:[{text:prompt}]}],
-          generationConfig:{temperature:parseFloat(temp),maxOutputTokens:8192}
+async function callGeminiWithRetry(prompt, key, model, temp){
+  for(let attempt = 1; attempt <= MAX_RETRIES; attempt++){
+    if(S.aborted) throw new Error('Aborted');
+    try {
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+      console.log(`[API] Attempt ${attempt}/${MAX_RETRIES} — POST ${url.replace(key,'***')}`);
+      const r = await fetch(url, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({
+          contents: [{parts: [{text: prompt}]}],
+          generationConfig: {temperature: parseFloat(temp), maxOutputTokens: 16384}
         })
       });
 
-      // Rate-limit or overload — respect Retry-After if present
-      if(r.status===429||r.status===503){
-        const e=await r.json().catch(()=>({}));
-        const errMsg=e.error?.message||`Status ${r.status}`;
-        // Check for Retry-After header
-        const retryAfter=parseInt(r.headers.get('Retry-After')||'0')*1000;
-        const wait=retryAfter||retryWaits[Math.min(attempt,retryWaits.length-1)];
-        lastErr=new Error(errMsg);
-        if(attempt<retryWaits.length){
-          toast(`⏳ API busy — waiting ${Math.round(wait/1000)}s then retrying (${attempt+1}/${retryWaits.length})…`,'warning',wait+500);
-          await sleep(wait);
-          continue;
-        }
-        break;
+      console.log(`[API] Response status: ${r.status} ${r.statusText}`);
+
+      if(r.ok){
+        const d = await r.json();
+        const text = d.candidates?.[0]?.content?.parts?.[0]?.text;
+        console.log(`[API] Success! Response length: ${(text||'').length} chars`);
+        if(text) return text;
+        console.error('[API] Empty response:', JSON.stringify(d, null, 2));
+        throw new Error('Model returned empty response');
       }
 
-      if(!r.ok){
-        const e=await r.json().catch(()=>({}));
-        const errMsg=(e.error?.message||`Status ${r.status}`).toLowerCase();
-        
-        // Auto-switch API version if model not found for this version (Google often returns HTTP 400 or 404 for this)
-        if(errMsg.includes('version') || errMsg.includes('not found') || errMsg.includes('deprecated')){
-          if(currentEndpointIdx < endpoints.length - 1){
-            currentEndpointIdx++;
-            toast(`⏳ Model needs different API version. Switching to ${endpoints[currentEndpointIdx]}...`,'info',3000);
-            attempt--; // retry immediately without waiting
-            continue;
-          }
-        }
-        
-        throw new Error(e.error?.message||`API error ${r.status}`);
-      }
+      const e = await r.json().catch(() => ({}));
+      const errMsg = e.error?.message || `Status ${r.status}`;
+      console.error(`[API] Error ${r.status}:`, errMsg);
+      console.error('[API] Full error object:', JSON.stringify(e, null, 2));
 
-      const d=await r.json();
-      // Check for blocked/empty response
-      const text=d.candidates?.[0]?.content?.parts?.[0]?.text;
-      if(!text&&d.candidates?.[0]?.finishReason==='OTHER'){
-        throw new Error('Model returned empty — try a different model');
-      }
-      return text||'';
-
-    }catch(err){
-      if(err.message==='Aborted')throw err;
-      lastErr=err;
-      // Network error — short wait then retry
-      if(attempt<retryWaits.length&&(err.message.includes('fetch')||err.message.includes('network'))){
+      if(r.status === 429 || errMsg.includes('RESOURCE_EXHAUSTED')){
+        console.log('[API] Rate limited — waiting 15s before retry...');
+        toast(`Rate limited. Waiting 15s... (attempt ${attempt}/${MAX_RETRIES})`, 'warning', 16000);
+        await sleep(15000);
+      } else {
+        console.log('[API] Non-rate-limit error — waiting 5s before retry...');
+        toast(`API error: ${errMsg.slice(0,80)} — retrying in 5s...`, 'warning', 6000);
         await sleep(5000);
-        continue;
       }
-      if(attempt>=retryWaits.length)break;
+    } catch(err) {
+      console.error(`[API] Exception on attempt ${attempt}:`, err.message);
+      if(err.message === 'Aborted') throw err;
+      if(attempt >= MAX_RETRIES) throw err;
+      toast(`Error: ${err.message.slice(0,60)} — retrying in 5s...`, 'warning', 6000);
+      await sleep(5000);
     }
   }
-  throw lastErr||new Error('All retries exhausted');
+  throw new Error('All retries exhausted');
 }
 
 function buildLogicPrompt(criteria){
