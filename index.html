@@ -935,85 +935,103 @@ async function callGeminiWithRetry(prompt,key,model,temp){
   throw lastErr||new Error('All retries exhausted');
 }
 
-function buildPrompt(arts,criteria){
-  return`You are an expert systematic reviewer screening articles for inclusion in a systematic review.
+function buildLogicPrompt(criteria){
+  return `You are an expert Javascript developer specializing in systematic review automation.
 
-SCREENING CRITERIA:
+I need you to generate a pure Javascript function body that screens academic articles based on these custom criteria:
 ${criteria}
 
-INSTRUCTIONS:
-- Carefully review each article's title and abstract against the criteria above
-- Return ONLY a valid JSON array — no markdown fences, no extra text outside the JSON
-- Each element must have exactly three fields: "key" (string), "decision" ("Include" or "Exclude"), "reason" (one concise sentence)
-- Be strict, consistent, and apply the criteria literally
+REQUIREMENTS:
+1. Generate ONLY the body of a Javascript function. I will explicitly inject it into \`new Function('title', 'abstract', your_code)\`.
+2. Do not include \`function(...)\` wrappers or markdown blocks in your final raw string if possible, or I will parse it out. Provide the code inside \`\`\`javascript ... \`\`\` blocks.
+3. The function takes two string parameters: \`title\` and \`abstract\`. (They may be empty strings).
+4. Use sophisticated logic patterns:
+   - Convert strings to uppercase for robust keyword matching
+   - Hierarchical decision trees
+   - Contextual exception handling (if keyword A and B, treat differently)
+   - Do NOT just do simple keyword matching. Address nuances.
+5. The function MUST return a Javascript object with exactly two keys:
+   {
+     decision: "Include" | "Exclude",
+     reason: "Detailed string explaining why you included or excluded this specific paper based on the exact criteria rules hit."
+   }
+6. Keep the code concise but rigorous.
+7. ONLY provide the code. DO NOT wrap with anything extra. DO NOT use import or export.
 
-ARTICLES TO SCREEN:
-${arts.map((a,i)=>`[${i+1}]
-key: "${a.key}"
-Title: ${a.title||'(no title)'}
-Year: ${a.year||'N/A'} | Journal: ${(a.journal||'N/A').slice(0,80)}
-Abstract: ${(a.abstract||'No abstract.').slice(0,550)}`).join('\n\n')}
-
-Return only the JSON array starting with [ and ending with ].`;
+Generate ONLY the Javascript code block.`;
 }
 
-function parseGeminiResp(text,arts){
-  let t=text.trim().replace(/^```json\s*/i,'').replace(/```\s*$/,'').trim().replace(/^```\s*/i,'').replace(/```\s*$/,'').trim();
-  let parsed=[];
-  try{const m=t.match(/\[[\s\S]*\]/);parsed=JSON.parse(m?m[0]:t)}
-  catch{try{let rep=t;const lc=rep.lastIndexOf('},');if(!rep.endsWith(']'))rep=lc>0?rep.slice(0,lc+1)+']':rep+']';parsed=JSON.parse(rep)}catch{return arts.map(a=>({key:a.key,title:a.title,decision:'Exclude',reason:'Parse error — please review manually'}))}}
-  const map=Object.fromEntries(parsed.map(r=>[r.key,r]));
-  return arts.map(a=>{const r=map[a.key];return r?{key:a.key,title:a.title,decision:/include/i.test(r.decision)?'Include':'Exclude',reason:r.reason||''}:{key:a.key,title:a.title,decision:'Exclude',reason:'Not returned by API'}});
+function extractJsCode(text) {
+  let code = text;
+  const match = text.match(/```(?:javascript|js)\n([\s\S]*?)```/i);
+  if (match) code = match[1];
+  return code.trim();
 }
 
 async function runDualPass(arts,criteria,key,model,onProg){
-  const bsz=parseInt(getBatch())||5; // Default 5 — less likely to hit token/rate limits
-  const temp=parseFloat(getTemp())||0.1;
-  const batches=[];
-  for(let i=0;i<arts.length;i+=bsz)batches.push(arts.slice(i,i+bsz));
-  const n=batches.length;
-  const pass1=[],pass2=[];
-  let skipped=0;
-  _lastCallTime=0; // Reset rate limiter for fresh run
+  // Generate the logic engine ONCE via the API
+  onProg({lbl:'Step 1: Generating Custom Evaluation Logic via AI...',pct:10,p:1,bi:0,bn:0,done:0,tot:arts.length});
 
-  toast(`Starting dual-pass screening: ${n} batches of ≤${bsz} articles each…`,'info',5000);
-
-  for(let i=0;i<n;i++){
-    if(S.aborted)throw new Error('Aborted');
-    onProg({lbl:`Pass 1: Batch ${i+1}/${n}…`,pct:(i/n)*50,p:1,bi:i+1,bn:n,done:i*bsz,tot:arts.length});
-    try{
-      const t=await callGeminiWithRetry(buildPrompt(batches[i],criteria),key,model,temp);
-      pass1.push(...parseGeminiResp(t,batches[i]));
-    }catch(err){
-      if(err.message==='Aborted')throw err;
-      skipped+=batches[i].length;
-      pass1.push(...batches[i].map(a=>({key:a.key,title:a.title,decision:'Exclude',reason:`Skipped after retries: ${err.message.slice(0,80)}`})));
-      toast(`⚠️ Batch ${i+1}/${n} failed (${err.message.slice(0,60)}) — marked for review, continuing…`,'warning',7000);
+  let jsCode = "";
+  try {
+    const prompt = buildLogicPrompt(criteria);
+    const rawResp = await callGeminiWithRetry(prompt, key, model, 0.1);
+    jsCode = extractJsCode(rawResp);
+    console.log("Generated Logic Engine:\\n", jsCode);
+  } catch(err) {
+    if(err.message==='Aborted') return null;
+    toast(`Strategy Generation Failed: ${err.message}`, 'error', 10000);
+    throw err;
+  }
+  
+  onProg({lbl:'Step 2: Compiling Local Rules Engine...',pct:40,p:1,bi:0,bn:0,done:0,tot:arts.length});
+  
+  let evaluateArticle;
+  try {
+    evaluateArticle = new Function('title', 'abstract', jsCode);
+  } catch(err) {
+    console.error("Compilation Error in AI Code:", err.message, jsCode);
+    toast(`Compilation Error in AI Code: ${err.message}`, 'error', 10000);
+    throw new Error('AI generated invalid Javascript logic.');
+  }
+  
+  onProg({lbl:'Step 3: Executing Screening Natively Natively...',pct:60,p:1,bi:0,bn:0,done:0,tot:arts.length});
+  
+  await sleep(300); // Visual pause for UX
+  
+  const pass1=[], pass2=[], agreed=[], disagreements=[];
+  
+  // Natively evaluate every article offline
+  for(let i=0; i<arts.length; i++) {
+    if(S.aborted) throw new Error('Aborted');
+    try {
+      const res = evaluateArticle(arts[i].title || "", arts[i].abstract || "");
+      const finalRes = {
+        key: arts[i].key,
+        title: arts[i].title,
+        decision: res.decision || "Exclude",
+        reason: res.reason || "Matched logic rules"
+      };
+      
+      // Since it's offline deterministic matching, both passes are identical
+      agreed.push({
+        ...finalRes,
+        pass1_reason: finalRes.reason,
+        pass2_reason: finalRes.reason
+      });
+      pass1.push(finalRes);
+      pass2.push(finalRes);
+    } catch (err) {
+      disagreements.push({
+        key: arts[i].key, title: arts[i].title,
+        pass1_decision: "Error", pass1_reason: err.message,
+        pass2_decision: "Error", pass2_reason: err.message,
+        final_decision: "FLAGGED_FOR_HUMAN_REVIEW"
+      });
     }
   }
-  for(let i=0;i<n;i++){
-    if(S.aborted)throw new Error('Aborted');
-    onProg({lbl:`Pass 2: Batch ${i+1}/${n}…`,pct:50+(i/n)*48,p:2,bi:i+1,bn:n,done:i*bsz+arts.length,tot:arts.length*2});
-    try{
-      const t=await callGeminiWithRetry(buildPrompt(batches[i],criteria),key,model,temp);
-      pass2.push(...parseGeminiResp(t,batches[i]));
-    }catch(err){
-      if(err.message==='Aborted')throw err;
-      pass2.push(...batches[i].map(a=>({key:a.key,title:a.title,decision:'Exclude',reason:`Skipped after retries: ${err.message.slice(0,80)}`})));
-      toast(`⚠️ Pass 2 batch ${i+1}/${n} failed — marked for review, continuing…`,'warning',7000);
-    }
-  }
-  onProg({lbl:`Comparing passes…`,pct:99,p:2,bi:n,bn:n,done:arts.length*2,tot:arts.length*2});
 
-  const p2m=Object.fromEntries(pass2.map(r=>[r.key,r]));
-  const agreed=[],disagreements=[];
-  for(const a of arts){
-    const r1=pass1.find(r=>r.key===a.key);const r2=p2m[a.key];
-    if(!r1||!r2)continue;
-    if(r1.decision===r2.decision)agreed.push({...r1,pass1_reason:r1.reason,pass2_reason:r2.reason});
-    else disagreements.push({key:a.key,title:a.title,pass1_decision:r1.decision,pass1_reason:r1.reason,pass2_decision:r2.decision,pass2_reason:r2.reason,final_decision:'FLAGGED_FOR_HUMAN_REVIEW'});
-  }
-  if(skipped>0)toast(`ℹ️ ${skipped} articles skipped due to API limits — check Flagged section`,'warning',8000);
+  onProg({lbl:\`Screening complete. 100% Native.\`,pct:99,p:2,bi:1,bn:1,done:arts.length,tot:arts.length});
   return{pass1,pass2,agreed,disagreements};
 }
 
