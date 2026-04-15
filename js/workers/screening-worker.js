@@ -1,6 +1,8 @@
 /* =============================================
    SRScreen — Screening Worker (screening-worker.js)
-   AI screener: Gemini API calls, pause/resume/abort
+   Domain-Expert LLM Screening: Gemini evaluates each
+   article using its full domain knowledge + user criteria.
+   Inclusion-first philosophy with token-efficient prompts.
    ============================================= */
 
 let paused = false;
@@ -70,7 +72,8 @@ async function runScreening({ articles, criteria, apiKeys, model, config }) {
         break;
       } catch (err) {
         retries--;
-        const isRateLimit = err.message && (err.message.includes('429') || err.message.includes('RESOURCE_EXHAUSTED') || err.message.includes('TOO_MANY_REQUESTS') || err.message.includes('QUOTA_EXCEEDED'));
+        const errMsg = err.message || '';
+        const isRateLimit = errMsg.includes('429') || errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('TOO_MANY_REQUESTS') || errMsg.includes('QUOTA_EXCEEDED');
 
         let keySwitched = false;
         if (isRateLimit && apiKeys.length > 1) {
@@ -89,7 +92,7 @@ async function runScreening({ articles, criteria, apiKeys, model, config }) {
           type: 'ERROR',
           payload: {
             index: i,
-            message: err.message || 'Unknown error',
+            message: errMsg || 'Unknown error',
             retriesLeft: retries,
             isRateLimit,
             keySwitched
@@ -185,7 +188,7 @@ async function screenArticle(article, criteria, apiKey, model, config) {
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: {
         temperature: config.temperature || 0.1,
-        maxOutputTokens: config.maxTokens || 512
+        maxOutputTokens: config.maxTokens || 300
       }
     })
   });
@@ -225,58 +228,98 @@ async function screenArticle(article, criteria, apiKey, model, config) {
   };
 }
 
-/* ─── Build the screening prompt ───────────── */
+/* ─── Build the screening prompt (Domain-Expert approach) ── */
 
 function buildPrompt(article, criteria) {
-  const studyTypes = (criteria.study_types || []).join(', ') || 'Any';
-  const incLogic = criteria.inclusion_keywords?.logic || 'ANY';
-  const incTerms = (criteria.inclusion_keywords?.terms || []).join(', ') || 'None specified';
-  const excTerms = (criteria.exclusion_keywords?.terms || []).join(', ') || 'None specified';
+  // Build a compact criteria summary
+  const criteriaParts = [];
 
+  // PICO
   const pico = criteria.pico || {};
-  const picoBlock = [
-    pico.P ? `Population: ${pico.P}` : '',
-    pico.I ? `Intervention: ${pico.I}` : '',
-    pico.C ? `Comparator: ${pico.C}` : '',
-    pico.O ? `Outcome: ${pico.O}` : ''
-  ].filter(Boolean).join('\n') || 'Not specified';
+  if (pico.P || pico.I || pico.C || pico.O) {
+    const picoItems = [];
+    if (pico.P) picoItems.push('Population: ' + pico.P);
+    if (pico.I) picoItems.push('Intervention: ' + pico.I);
+    if (pico.C) picoItems.push('Comparator: ' + pico.C);
+    if (pico.O) picoItems.push('Outcome: ' + pico.O);
+    criteriaParts.push('PICO:\n' + picoItems.join('\n'));
+  }
 
-  const rulesBlock = (criteria.custom_rules || [])
-    .map(r => `- IF ${r.field} CONTAINS "${r.term}" THEN ${r.action}`)
-    .join('\n') || 'None';
+  // Study types
+  const studyTypes = criteria.study_types || [];
+  if (studyTypes.length > 0 && !studyTypes.includes('All')) {
+    criteriaParts.push('Acceptable study designs: ' + studyTypes.join(', '));
+  }
 
-  return `You are a systematic review screener. Evaluate the following article against the inclusion/exclusion criteria and return a JSON decision.
+  // Inclusion keywords
+  const incTerms = criteria.inclusion_keywords?.terms || [];
+  if (incTerms.length > 0) {
+    const logic = criteria.inclusion_keywords?.logic || 'ANY';
+    criteriaParts.push('Inclusion topics (' + logic + ' match): ' + incTerms.join(', '));
+  }
 
-## ARTICLE
-Title: ${article.title || '[No title]'}
-Authors: ${article.authors || '[Unknown]'}
-Year: ${article.year || '[Unknown]'}
-Abstract: ${article.abstract || '[Abstract not available]'}
-Journal: ${article.journal || '[Unknown]'}
+  // Exclusion keywords
+  const excTerms = criteria.exclusion_keywords?.terms || [];
+  if (excTerms.length > 0) {
+    criteriaParts.push('Exclusion topics: ' + excTerms.join(', '));
+  }
 
-## CRITERIA
-Study Types: ${studyTypes}
+  // Custom rules
+  const rules = criteria.custom_rules || [];
+  if (rules.length > 0) {
+    criteriaParts.push('Rules:\n' + rules.map(r => '- IF ' + r.field + ' mentions "' + r.term + '" THEN ' + r.action).join('\n'));
+  }
 
-PICO Framework:
-${picoBlock}
+  const criteriaBlock = criteriaParts.length > 0
+    ? criteriaParts.join('\n\n')
+    : 'No specific criteria provided. Use your expert judgement to assess general relevance.';
 
-Inclusion keywords (${incLogic}): ${incTerms}
-Exclusion keywords: ${excTerms}
+  // Build article block (compact)
+  const titleLine = article.title || '[No title]';
+  const abstractLine = article.abstract || '';
+  const metaLine = [
+    article.authors ? 'Authors: ' + article.authors : '',
+    article.year ? 'Year: ' + article.year : '',
+    article.journal ? 'Journal: ' + article.journal : ''
+  ].filter(Boolean).join(' | ');
 
-Custom rules:
-${rulesBlock}
+  // The prompt: Expert screener with inclusion-first philosophy
+  let prompt = `You are an expert systematic review screener with deep domain knowledge in biomedical and clinical research. Your task is to screen one article for a systematic review.
 
-## INSTRUCTIONS
-Evaluate the article strictly against the criteria above. Consider the title and abstract carefully.
-${!article.abstract ? 'NOTE: No abstract is available. Base your decision on the title only and cap confidence at 70%.' : ''}
+SCREENING CRITERIA:
+${criteriaBlock}
 
-Return ONLY valid JSON with no markdown fences, no preamble, no explanation outside the JSON:
-{
-  "decision": "INCLUDE" | "EXCLUDE" | "UNCERTAIN",
-  "confidence": <integer 0-100>,
-  "reasoning": "<2-4 sentences explaining your decision>",
-  "matched_criteria": ["<list of matched inclusion or exclusion points>"]
-}`;
+ARTICLE:
+Title: ${titleLine}`;
+
+  if (metaLine) {
+    prompt += '\n' + metaLine;
+  }
+
+  if (abstractLine) {
+    prompt += '\nAbstract: ' + abstractLine;
+  }
+
+  prompt += `
+
+INSTRUCTIONS:
+Use your full domain knowledge to evaluate this article. Do NOT just do keyword matching — understand the meaning, synonyms, related concepts, and clinical context.
+
+INCLUSION-FIRST RULE: Default to INCLUDE. Only EXCLUDE if the article is CLEARLY and DEFINITIVELY irrelevant to the review topic. If there is ANY reasonable possibility the article could be relevant, INCLUDE it.
+- INCLUDE: Article is relevant or potentially relevant to the criteria.
+- EXCLUDE: Article is definitively outside the scope (e.g., completely different population, unrelated topic, wrong study type).
+- UNCERTAIN: Cannot determine from title/abstract alone.`;
+
+  if (!abstractLine) {
+    prompt += '\nNOTE: No abstract available. Be MORE inclusive — cap confidence at 70%.';
+  }
+
+  prompt += `
+
+Return ONLY valid JSON, no markdown fences:
+{"decision":"INCLUDE","confidence":85,"reasoning":"Brief 1-2 sentence explanation","matched_criteria":["relevant criterion"]}`;
+
+  return prompt;
 }
 
 /* ─── Parse AI response into structured decision ── */
