@@ -525,8 +525,8 @@ Non-bone: Synovial, Tenosynovial</pre>
           <div class="step-title">Gemini API Key &amp; Model</div>
           <div class="api-form">
             <div class="input-group">
-              <label class="input-label">API Key</label>
-              <input class="input input-mono" type="password" id="api-key-input" placeholder="AIza…" autocomplete="off">
+              <label class="input-label">API Key(s) — comma-separated for rotation</label>
+              <input class="input input-mono" type="password" id="api-key-input" placeholder="AIza…key1, AIza…key2, AIza…key3" autocomplete="off">
             </div>
             <div class="input-group" style="min-width:190px;max-width:220px">
               <label class="input-label">Model</label>
@@ -762,8 +762,23 @@ const LS = {
   set:(k,v)=>{try{localStorage.setItem(k,JSON.stringify(v))}catch{}},
   del:(k)=>{try{localStorage.removeItem(k)}catch{}}
 };
-const getKey=()=>LS.get('sr_key','');
+// Multi-key support: stored as comma-separated string
+let _currentKeyIndex = 0;
+const getKeys=()=>{
+  const raw=LS.get('sr_key','');
+  return raw.split(',').map(k=>k.trim()).filter(k=>k.length>10);
+};
+const getKey=()=>{const keys=getKeys();return keys.length?keys[_currentKeyIndex%keys.length]:'';};
 const setKey=(v)=>LS.set('sr_key',v);
+function rotateKey(){
+  const keys=getKeys();
+  if(keys.length<=1) return false;
+  _currentKeyIndex=(_currentKeyIndex+1)%keys.length;
+  toast(`🔑 Rotated to API key ${_currentKeyIndex+1}/${keys.length}`,'info',3000);
+  const ki=document.getElementById('live-key-info');
+  if(ki) ki.textContent=`Key ${_currentKeyIndex+1}/${keys.length}`;
+  return true;
+}
 const getModel=()=>{
   const validModels = ['gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-2.0-flash', 'gemini-2.0-flash-lite'];
   const m = LS.get('sr_model','gemini-2.5-flash');
@@ -923,7 +938,7 @@ function autoparse(filename,text){
 // ══════════════════════════════════════════════════════════
 async function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
 
-const MAX_RETRIES = 4;
+const MAX_RETRIES = 10;
 // Adaptive delay state
 let _adaptiveDelay = 500;  // starts at 500ms between articles
 let _consecutiveOk = 0;
@@ -931,23 +946,26 @@ const DELAY_MIN = 300, DELAY_MAX = 12000;
 
 function adaptDelaySuccess() {
   _consecutiveOk++;
-  // Every 5 consecutive successes, reduce delay by 20% down to minimum
   if (_consecutiveOk >= 5) { _consecutiveOk = 0; _adaptiveDelay = Math.max(DELAY_MIN, Math.round(_adaptiveDelay * 0.8)); }
   const di = document.getElementById('live-delay-info');
   if (di) di.textContent = `Delay: ${_adaptiveDelay}ms`;
 }
 function adaptDelayRateLimit() {
   _consecutiveOk = 0;
-  _adaptiveDelay = Math.min(DELAY_MAX, Math.round(_adaptiveDelay * 2.5)); // aggressive back-off
+  _adaptiveDelay = Math.min(DELAY_MAX, Math.round(_adaptiveDelay * 2.5));
   const di = document.getElementById('live-delay-info');
   if (di) di.textContent = `⚠️ Rate limited — delay: ${_adaptiveDelay}ms`;
 }
 
 async function callGeminiWithRetry(prompt, key, model, temp){
-  for(let attempt = 1; attempt <= MAX_RETRIES; attempt++){
+  let rateLimitHits = 0;
+  const totalKeys = getKeys().length;
+
+  for(let attempt = 1; ; attempt++){  // infinite loop — never skip an article
     if(S.aborted) throw new Error('Aborted');
     try {
-      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
+      const currentKey = getKey(); // always use current rotated key
+      const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${currentKey}`;
       const r = await fetch(url, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
@@ -958,6 +976,7 @@ async function callGeminiWithRetry(prompt, key, model, temp){
       });
 
       if(r.ok){
+        rateLimitHits = 0;
         const d = await r.json();
         const text = d.candidates?.[0]?.content?.parts?.[0]?.text;
         if(text) { adaptDelaySuccess(); return text; }
@@ -967,13 +986,41 @@ async function callGeminiWithRetry(prompt, key, model, temp){
       const e = await r.json().catch(() => ({}));
       const errMsg = e.error?.message || `Status ${r.status}`;
 
-      if(r.status === 429 || errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('QUOTA')){
+      if(r.status === 429 || errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('QUOTA') || r.status === 503){
+        rateLimitHits++;
         adaptDelayRateLimit();
-        const waitMs = Math.min(60000, 8000 * attempt); // 8s, 16s, 24s, 32s
-        toast(`⏳ Rate limited — waiting ${Math.round(waitMs/1000)}s… (attempt ${attempt}/${MAX_RETRIES})`, 'warning', waitMs + 1000);
+
+        // Try rotating to another key first
+        if(r.status === 429 && rotateKey()){
+          toast(`🔄 Rate limited — switched key, retrying...`, 'warning', 3000);
+          await sleep(2000);
+          continue;
+        }
+
+        // All keys exhausted after 2 full cycles — long wait
+        const fullCycles = Math.floor(rateLimitHits / Math.max(totalKeys, 1));
+        if(fullCycles >= 2){
+          const longWait = 60;
+          toast(`⏳ All keys rate-limited. Waiting ${longWait}s for quota reset…`, 'warning', longWait * 1000);
+          for(let s = longWait; s > 0; s--){
+            if(S.aborted) throw new Error('Aborted');
+            const di = document.getElementById('live-delay-info');
+            if(di) di.textContent = `⏳ Cooling down: ${s}s`;
+            await sleep(1000);
+          }
+          rateLimitHits = 0; // reset after long wait
+          continue;
+        }
+
+        // Normal rate limit wait: 15s, 20s, 30s...
+        const waitMs = Math.min(60000, 15000 + 5000 * (attempt - 1));
+        toast(`⏳ Rate limited — waiting ${Math.round(waitMs/1000)}s… (attempt ${attempt})`, 'warning', waitMs + 1000);
         await sleep(waitMs);
+      } else if(attempt >= MAX_RETRIES) {
+        // Non-rate-limit error after max retries — give up on this one
+        throw new Error(errMsg);
       } else {
-        toast(`API error: ${errMsg.slice(0,80)} — retrying in 5s...`, 'warning', 6000);
+        toast(`API error: ${errMsg.slice(0,80)} — retrying...`, 'warning', 6000);
         await sleep(5000);
       }
     } catch(err) {
@@ -982,7 +1029,6 @@ async function callGeminiWithRetry(prompt, key, model, temp){
       await sleep(3000 * attempt);
     }
   }
-  throw new Error('All retries exhausted');
 }
 
 function buildScreeningPrompt(article, criteria, passNum) {
