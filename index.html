@@ -346,7 +346,7 @@ code{background:var(--surface-3);padding:1px 6px;border-radius:4px;font-family:'
           <div class="pipe-step" id="pipe-3">
             <div class="pipe-num">🤖</div>
             <div class="pipe-label">AI Screening</div>
-            <div class="pipe-sub">Dual-pass Gemini</div>
+            <div class="pipe-sub">Domain-Expert AI</div>
           </div>
           <div class="pipe-step" id="pipe-4">
             <div class="pipe-num">⚖️</div>
@@ -558,7 +558,7 @@ Non-bone: Synovial, Tenosynovial</pre>
             <button class="btn btn-primary btn-lg" id="run-btn">🤖 Run AI Screening</button>
             <button class="btn btn-ghost" id="abort-btn" style="display:none">⛔ Abort</button>
           </div>
-          <div style="margin-top:8px;font-size:11.5px;color:var(--text-3)">AI generates a custom screening engine from your criteria in one API call, then screens all articles instantly in your browser.</div>
+          <div style="margin-top:8px;font-size:11.5px;color:var(--text-3)">Gemini AI evaluates each article twice independently using domain knowledge. Inclusion-first screening with dual-pass adjudication.</div>
         </div>
       </div>
     </div>
@@ -673,7 +673,7 @@ Non-bone: Synovial, Tenosynovial</pre>
 <script>
 /* ══════════════════════════════════════════════════════════════
    SR Screening Agent — Browser Interface v2.0
-   Mirrors screen.py pipeline: dual-pass Gemini AI screening
+   Domain-Expert dual-pass Gemini AI screening
    Parsers: BibTeX · RIS · PubMed/MEDLINE · NBIB
    © ORG-Karur-DataCenter
 ══════════════════════════════════════════════════════════════ */
@@ -845,14 +845,13 @@ function autoparse(filename,text){
 }
 
 // ══════════════════════════════════════════════════════════
-// GEMINI API — Dual-Pass Screening Engine
-// Pacing matches extraction agent: 4-5s between calls, long waits on 429
+// GEMINI API — Domain-Expert Dual-Pass Screening
+// Each article evaluated twice by Gemini using full domain knowledge
 // ══════════════════════════════════════════════════════════
 async function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
 
-// Track last request time for global rate-limiter
-// Mirrors generate_screening_code.py:generate_via_api() exactly
-// Model: gemini-2.5-flash | Endpoint: v1beta | Retries: 3 | 429 wait: 15s | Other wait: 5s
+// Rate limiter with retry and backoff
+// Endpoint: v1beta | Retries: 3 | 429 wait: 15s | Other wait: 5s
 const MAX_RETRIES = 3;
 
 async function callGeminiWithRetry(prompt, key, model, temp){
@@ -866,7 +865,7 @@ async function callGeminiWithRetry(prompt, key, model, temp){
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
           contents: [{parts: [{text: prompt}]}],
-          generationConfig: {temperature: parseFloat(temp), maxOutputTokens: 16384}
+          generationConfig: {temperature: parseFloat(temp), maxOutputTokens: 256}
         })
       });
 
@@ -906,115 +905,101 @@ async function callGeminiWithRetry(prompt, key, model, temp){
   throw new Error('All retries exhausted');
 }
 
-function buildLogicPrompt(criteria){
-  return `You are an expert Javascript developer specializing in systematic review automation.
+function buildScreeningPrompt(article, criteria, passNum) {
+  const perspective = passNum === 1
+    ? 'You are Reviewer A, an expert systematic review screener with deep domain knowledge in biomedical and clinical research.'
+    : 'You are Reviewer B, an independent systematic review screener providing a second opinion with deep domain knowledge in biomedical and clinical research.';
 
-I need you to generate a pure Javascript function body that screens academic articles based on these custom criteria:
-${criteria}
+  const titleLine = article.title || '[No title]';
+  const abstractLine = article.abstract || '';
+  const metaParts = [];
+  if (article.author) metaParts.push('Authors: ' + article.author);
+  if (article.year) metaParts.push('Year: ' + article.year);
+  if (article.journal) metaParts.push('Journal: ' + article.journal);
 
-REQUIREMENTS:
-1. Generate ONLY the body of a Javascript function. I will explicitly inject it into 'new Function(\"title\", \"abstract\", your_code)'.
-2. Do not include 'function(...)' wrappers or markdown blocks in your final raw string if possible, or I will parse it out. Provide the code inside Javascript blocks.
-3. The function takes two string parameters: \`title\` and \`abstract\`. (They may be empty strings).
-4. Use sophisticated logic patterns:
-   - Convert strings to uppercase for robust keyword matching
-   - Hierarchical decision trees
-   - Contextual exception handling (if keyword A and B, treat differently)
-   - Do NOT just do simple keyword matching. Address nuances.
-5. The function MUST return a Javascript object with exactly two keys:
-   {
-     decision: "Include" | "Exclude",
-     reason: "Detailed string explaining why you included or excluded this specific paper based on the exact criteria rules hit."
-   }
-6. Keep the code concise but rigorous.
-7. ONLY provide the code. DO NOT wrap with anything extra. DO NOT use import or export.
+  let prompt = perspective + '\n\nEvaluate this article for inclusion in a systematic review.\n\nSCREENING CRITERIA:\n' + criteria + '\n\nARTICLE:\nTitle: ' + titleLine;
+  if (metaParts.length > 0) prompt += '\n' + metaParts.join(' | ');
+  if (abstractLine) prompt += '\nAbstract: ' + abstractLine;
+  prompt += '\n\nINSTRUCTIONS:\n- Use your FULL domain knowledge. Understand meaning, synonyms, related concepts, and clinical context. Do NOT just keyword-match.\n- INCLUSION-FIRST: Default to Include. Only Exclude if CLEARLY and DEFINITIVELY outside scope.\n  Include = relevant or potentially relevant. Exclude = definitively irrelevant.';
+  if (!abstractLine) prompt += '\n- No abstract available. Be MORE inclusive, lean toward Include.';
+  prompt += '\n\nReturn ONLY valid JSON, no markdown fences:\n{"decision":"Include","reason":"Brief 1-2 sentence explanation"}';
 
-Generate ONLY the Javascript code block.`;
+  return prompt;
 }
 
-function extractJsCode(text) {
-  let code = text;
-  const match = text.match(/```(?:javascript|js)\n([\s\S]*?)```/i);
-  if (match) code = match[1];
-  return code.trim();
+function parseScreeningResponse(text) {
+  try {
+    let clean = text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();
+    const match = clean.match(/\{[\s\S]*?\}/);
+    if (!match) throw new Error('No JSON found');
+    const parsed = JSON.parse(match[0]);
+    let decision = (parsed.decision || '').trim();
+    if (decision.toLowerCase() === 'include') decision = 'Include';
+    else if (decision.toLowerCase() === 'exclude') decision = 'Exclude';
+    else decision = 'Include';
+    return { decision, reason: parsed.reason || parsed.reasoning || 'No reason provided.' };
+  } catch (e) {
+    const upper = text.toUpperCase();
+    if (upper.includes('"EXCLUDE"') || upper.includes('EXCLUDE')) return { decision: 'Exclude', reason: 'Parsed from raw response.' };
+    return { decision: 'Include', reason: 'Could not parse response, defaulting to Include.' };
+  }
 }
 
-async function runDualPass(arts,criteria,key,model,onProg){
-  // Generate the logic engine ONCE via the API
-  onProg({lbl:'🧠 Generating screening logic from your criteria via AI…',pct:5,status:'Sending criteria to Gemini…',detail:''});
+async function runDualPass(arts, criteria, key, model, onProg) {
+  const pass1 = [], pass2 = [], agreed = [], disagreements = [];
+  const total = arts.length;
+  onProg({lbl:'🔬 Starting domain-expert dual-pass screening…', pct:2, status:'Initializing…', detail:'0 / ' + total});
 
-  let jsCode = "";
-  try {
-    const prompt = buildLogicPrompt(criteria);
-    const rawResp = await callGeminiWithRetry(prompt, key, model, 0.1);
-    jsCode = extractJsCode(rawResp);
-    console.log("Generated Logic Engine:\n", jsCode);
-  } catch(err) {
-    if(err.message==='Aborted') return null;
-    toast(`Strategy Generation Failed: ${err.message}`, 'error', 10000);
-    throw err;
-  }
-  
-  onProg({lbl:'⚙️ Compiling screening logic in your browser…',pct:30,status:'Building local rules engine…',detail:''});
-  
-  let evaluateArticle;
-  try {
-    evaluateArticle = new Function('title', 'abstract', jsCode);
-  } catch(err) {
-    console.error("Compilation Error in AI Code:", err.message, jsCode);
-    toast(`Compilation Error in AI Code: ${err.message}`, 'error', 10000);
-    throw new Error('AI generated invalid Javascript logic.');
-  }
-  
-  onProg({lbl:'🔍 Applying screening logic to articles…',pct:35,status:`Screening ${arts.length} articles locally…`,detail:`0 / ${arts.length}`});
-  
-  await sleep(200);
-  
-  const pass1=[], pass2=[], agreed=[], disagreements=[];
-  
-  for(let i=0; i<arts.length; i++) {
-    if(S.aborted) throw new Error('Aborted');
-    
-    // Update progress every article
-    const pct = 35 + Math.round((i / arts.length) * 60);
-    if(i % 5 === 0 || i === arts.length - 1) {
-      onProg({lbl:`🔍 Screening article ${i+1} of ${arts.length}…`,pct:pct,status:`Evaluating: ${(arts[i].title||'').slice(0,60)}…`,detail:`${i+1} / ${arts.length}`});
-    }
-    
+  for (let i = 0; i < total; i++) {
+    if (S.aborted) throw new Error('Aborted');
+    const art = arts[i];
+    const pct = 2 + Math.round((i / total) * 96);
+
+    // Pass 1: First independent LLM evaluation
+    onProg({lbl:'🔬 Article ' + (i+1) + '/' + total + ' — Pass 1', pct, status:(art.title||'').slice(0,55) + '…', detail:(i+1) + ' / ' + total});
+    let r1;
     try {
-      const res = evaluateArticle(arts[i].title || "", arts[i].abstract || "");
-      const finalRes = {
-        key: arts[i].key,
-        title: arts[i].title,
-        decision: res.decision || "Exclude",
-        reason: res.reason || "Matched logic rules"
-      };
-      
-      agreed.push({
-        ...finalRes,
-        pass1_reason: finalRes.reason,
-        pass2_reason: finalRes.reason
-      });
-      pass1.push(finalRes);
-      pass2.push(finalRes);
+      r1 = parseScreeningResponse(await callGeminiWithRetry(buildScreeningPrompt(art, criteria, 1), key, model, 0.1));
     } catch (err) {
-      disagreements.push({
-        key: arts[i].key, title: arts[i].title,
-        pass1_decision: "Error", pass1_reason: err.message,
-        pass2_decision: "Error", pass2_reason: err.message,
-        final_decision: "FLAGGED_FOR_HUMAN_REVIEW"
-      });
+      if (err.message === 'Aborted') throw err;
+      r1 = {decision:'Error', reason:'Pass 1 failed: ' + err.message};
     }
-    
-    // Yield to UI thread every 50 articles so progress bar actually updates
-    if(i % 50 === 0) await sleep(0);
+
+    await sleep(2000);
+    if (S.aborted) throw new Error('Aborted');
+
+    // Pass 2: Second independent LLM evaluation
+    onProg({lbl:'🔬 Article ' + (i+1) + '/' + total + ' — Pass 2', pct, status:(art.title||'').slice(0,55) + '…', detail:(i+1) + ' / ' + total});
+    let r2;
+    try {
+      r2 = parseScreeningResponse(await callGeminiWithRetry(buildScreeningPrompt(art, criteria, 2), key, model, 0.1));
+    } catch (err) {
+      if (err.message === 'Aborted') throw err;
+      r2 = {decision:'Error', reason:'Pass 2 failed: ' + err.message};
+    }
+
+    pass1.push({key:art.key, title:art.title, decision:r1.decision, reason:r1.reason});
+    pass2.push({key:art.key, title:art.title, decision:r2.decision, reason:r2.reason});
+
+    // Adjudicate: both passes must agree
+    if (r1.decision === r2.decision && r1.decision !== 'Error') {
+      agreed.push({key:art.key, title:art.title, decision:r1.decision, reason:r1.reason, pass1_reason:r1.reason, pass2_reason:r2.reason});
+    } else {
+      disagreements.push({key:art.key, title:art.title, pass1_decision:r1.decision, pass1_reason:r1.reason, pass2_decision:r2.decision, pass2_reason:r2.reason, final_decision:'FLAGGED_FOR_HUMAN_REVIEW'});
+    }
+
+    console.log('[Screen] #' + (i+1) + ' P1:' + r1.decision + ' P2:' + r2.decision + ' -> ' + (r1.decision===r2.decision ? r1.decision : 'FLAGGED'));
+
+    // Rate-limit delay between articles (2.5s gap)
+    if (i < total - 1) await sleep(2500);
   }
 
   const inc = agreed.filter(r => r.decision === 'Include').length;
   const exc = agreed.filter(r => r.decision === 'Exclude').length;
-  onProg({lbl:`✅ Screening complete — ${inc} included, ${exc} excluded, ${disagreements.length} flagged`,pct:100,status:'Done!',detail:`${arts.length} / ${arts.length}`});
-  return{pass1,pass2,agreed,disagreements};
+  onProg({lbl:'✅ Done — ' + inc + ' included, ' + exc + ' excluded, ' + disagreements.length + ' flagged', pct:100, status:'Done!', detail:total + ' / ' + total});
+  return{pass1, pass2, agreed, disagreements};
 }
+
 
 // ══════════════════════════════════════════════════════════
 // UI RENDERERS
