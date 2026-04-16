@@ -59,8 +59,9 @@ nav{padding:12px 10px;flex:1}
 
 /* ─── STATS ─── */
 .stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:14px;margin-bottom:24px}
-.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;position:relative;overflow:hidden;transition:border-color .2s var(--ease)}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:18px 20px;position:relative;overflow:hidden;transition:border-color .2s var(--ease),transform .15s var(--ease)}
 .stat-card:hover{border-color:var(--border-2)}
+.stat-card.bump{transform:scale(1.04);border-color:var(--accent)}
 .stat-card::after{content:'';position:absolute;top:-20px;right:-20px;width:80px;height:80px;border-radius:50%;opacity:.07}
 .stat-card.c-accent::after{background:var(--accent)}
 .stat-card.c-green::after{background:var(--green)}
@@ -74,6 +75,37 @@ nav{padding:12px 10px;flex:1}
 .stat-card.c-amber .stat-value{color:var(--amber)}
 .stat-card.c-accent .stat-value{color:var(--accent-hover)}
 .stat-sub{font-size:11px;color:var(--text-3);margin-top:4px}
+
+/* ─── LIVE SCREENING FEED ─── */
+.live-feed{display:none;margin-top:16px;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;background:var(--surface)}
+.live-feed.visible{display:block}
+.live-feed-header{padding:10px 16px;background:var(--surface-2);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:8px;font-size:12.5px;font-weight:600}
+.live-dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 8px var(--green);animation:pulseDot 1.2s ease-in-out infinite}
+@keyframes pulseDot{0%,100%{opacity:1;transform:scale(1)}50%{opacity:.5;transform:scale(.8)}}
+.live-stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:0;border-bottom:1px solid var(--border)}
+.live-stat{padding:12px 16px;text-align:center;border-right:1px solid var(--border)}
+.live-stat:last-child{border-right:none}
+.live-stat-val{font-size:22px;font-weight:800;line-height:1;letter-spacing:-.5px}
+.live-stat-lbl{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--text-3);margin-top:3px}
+.live-stat.inc .live-stat-val{color:var(--green)}
+.live-stat.exc .live-stat-val{color:var(--red)}
+.live-stat.flg .live-stat-val{color:var(--amber)}
+.live-current{padding:14px 16px;border-bottom:1px solid var(--border)}
+.live-current-tag{font-size:10px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--text-3);margin-bottom:5px}
+.live-current-title{font-size:13px;font-weight:600;color:var(--text);margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.live-current-meta{font-size:11.5px;color:var(--text-2)}
+.live-result-badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:700;margin-left:8px}
+.live-result-badge.inc{background:var(--green-dim);color:var(--green);border:1px solid rgba(34,197,94,.3)}
+.live-result-badge.exc{background:var(--red-dim);color:var(--red);border:1px solid rgba(239,68,68,.3)}
+.live-result-badge.flg{background:var(--amber-dim);color:var(--amber);border:1px solid rgba(245,158,11,.3)}
+.live-feed-list{max-height:240px;overflow-y:auto}
+.live-feed-item{display:flex;align-items:center;gap:10px;padding:8px 16px;border-bottom:1px solid rgba(255,255,255,.04);font-size:12px;animation:fadeUp .2s var(--ease)}
+.live-feed-item:last-child{border-bottom:none}
+.live-feed-num{font-size:10.5px;font-weight:700;color:var(--text-3);min-width:28px;font-family:'JetBrains Mono',monospace}
+.live-feed-title{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text)}
+.live-feed-reason{font-size:11px;color:var(--text-2);max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.live-rate-info{padding:8px 16px;font-size:11px;color:var(--text-3);border-top:1px solid var(--border);display:flex;gap:16px}
+
 
 /* ─── CARDS ─── */
 .card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);overflow:hidden}
@@ -545,7 +577,7 @@ Non-bone: Synovial, Tenosynovial</pre>
       <div class="step-row">
         <div class="step-num">4</div>
         <div class="step-content">
-          <div class="step-title">Run Dual-Pass AI Screening</div>
+          <div class="step-title">Run AI Screening</div>
           <div class="progress-wrap" id="progress-wrap">
             <div class="progress-label" id="progress-label">Initializing…</div>
             <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
@@ -558,7 +590,45 @@ Non-bone: Synovial, Tenosynovial</pre>
             <button class="btn btn-primary btn-lg" id="run-btn">🤖 Run AI Screening</button>
             <button class="btn btn-ghost" id="abort-btn" style="display:none">⛔ Abort</button>
           </div>
-          <div style="margin-top:8px;font-size:11.5px;color:var(--text-3)">Gemini AI evaluates each article twice independently using domain knowledge. Inclusion-first screening with dual-pass adjudication.</div>
+          <div style="margin-top:8px;font-size:11.5px;color:var(--text-3)">Gemini AI screens each article using full domain knowledge + your criteria. Single-pass with inclusion-first philosophy.</div>
+
+          <!-- Live Screening Statistics Feed -->
+          <div class="live-feed" id="live-feed">
+            <div class="live-feed-header">
+              <div class="live-dot" id="live-dot"></div>
+              <span id="live-feed-status">Screening in progress…</span>
+              <span style="margin-left:auto;font-size:11px;color:var(--text-3)" id="live-eta"></span>
+            </div>
+            <div class="live-stats-row">
+              <div class="live-stat">
+                <div class="live-stat-val" id="ls-total">0</div>
+                <div class="live-stat-lbl">Screened</div>
+              </div>
+              <div class="live-stat inc">
+                <div class="live-stat-val" id="ls-inc">0</div>
+                <div class="live-stat-lbl">Included</div>
+              </div>
+              <div class="live-stat exc">
+                <div class="live-stat-val" id="ls-exc">0</div>
+                <div class="live-stat-lbl">Excluded</div>
+              </div>
+              <div class="live-stat flg">
+                <div class="live-stat-val" id="ls-flg">0</div>
+                <div class="live-stat-lbl">Uncertain</div>
+              </div>
+            </div>
+            <div class="live-current" id="live-current" style="display:none">
+              <div class="live-current-tag">Currently Screening</div>
+              <div class="live-current-title" id="live-current-title">—</div>
+              <div class="live-current-meta" id="live-current-meta"></div>
+            </div>
+            <div class="live-feed-list" id="live-feed-list"></div>
+            <div class="live-rate-info">
+              <span id="live-rate-mode">⚡ Adaptive rate limiting</span>
+              <span id="live-delay-info"></span>
+              <span id="live-key-info"></span>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -569,10 +639,11 @@ Non-bone: Synovial, Tenosynovial</pre>
 <div class="tab-panel" id="tab-results">
   <div class="page-header">
     <div class="page-title">Screening Results</div>
-    <div class="page-sub">Article decisions from the most recent session.</div>
+    <div class="page-sub">Article decisions — updates live as screening progresses.</div>
   </div>
   <div class="content" id="results-content">
-    <div class="empty"><div class="empty-icon">📊</div><div class="empty-title">No results yet</div><div class="empty-text">Run a screening session to see results here.</div></div>
+    <!-- Live results injected here -->
+    <div id="results-live-placeholder" class="empty"><div class="empty-icon">📊</div><div class="empty-title">No results yet</div><div class="empty-text">Run a screening session to see results here.</div></div>
   </div>
 </div>
 
@@ -845,85 +916,92 @@ function autoparse(filename,text){
 }
 
 // ══════════════════════════════════════════════════════════
-// GEMINI API — Domain-Expert Dual-Pass Screening
-// Each article evaluated twice by Gemini using full domain knowledge
+// GEMINI API — Dual-Pass Expert Screening (Two-Sweep)
+// Pass 1 runs for ALL articles, then Pass 2 runs for ALL articles.
+// Natural gap between sweeps gives rate limits time to recover.
+// Adaptive inter-request delay keeps throughput high.
 // ══════════════════════════════════════════════════════════
 async function sleep(ms){return new Promise(r=>setTimeout(r,ms))}
 
-// Rate limiter with retry and backoff
-// Endpoint: v1beta | Retries: 3 | 429 wait: 15s | Other wait: 5s
-const MAX_RETRIES = 3;
+const MAX_RETRIES = 4;
+// Adaptive delay state
+let _adaptiveDelay = 500;  // starts at 500ms between articles
+let _consecutiveOk = 0;
+const DELAY_MIN = 300, DELAY_MAX = 12000;
+
+function adaptDelaySuccess() {
+  _consecutiveOk++;
+  // Every 5 consecutive successes, reduce delay by 20% down to minimum
+  if (_consecutiveOk >= 5) { _consecutiveOk = 0; _adaptiveDelay = Math.max(DELAY_MIN, Math.round(_adaptiveDelay * 0.8)); }
+  const di = document.getElementById('live-delay-info');
+  if (di) di.textContent = `Delay: ${_adaptiveDelay}ms`;
+}
+function adaptDelayRateLimit() {
+  _consecutiveOk = 0;
+  _adaptiveDelay = Math.min(DELAY_MAX, Math.round(_adaptiveDelay * 2.5)); // aggressive back-off
+  const di = document.getElementById('live-delay-info');
+  if (di) di.textContent = `⚠️ Rate limited — delay: ${_adaptiveDelay}ms`;
+}
 
 async function callGeminiWithRetry(prompt, key, model, temp){
   for(let attempt = 1; attempt <= MAX_RETRIES; attempt++){
     if(S.aborted) throw new Error('Aborted');
     try {
       const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`;
-      console.log(`[API] Attempt ${attempt}/${MAX_RETRIES} — POST ${url.replace(key,'***')}`);
       const r = await fetch(url, {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({
           contents: [{parts: [{text: prompt}]}],
-          generationConfig: {temperature: parseFloat(temp), maxOutputTokens: 256}
+          generationConfig: {temperature: parseFloat(temp), maxOutputTokens: 200}
         })
       });
-
-      console.log(`[API] Response status: ${r.status} ${r.statusText}`);
 
       if(r.ok){
         const d = await r.json();
         const text = d.candidates?.[0]?.content?.parts?.[0]?.text;
-        console.log(`[API] Success! Response length: ${(text||'').length} chars`);
-        if(text) return text;
-        console.error('[API] Empty response:', JSON.stringify(d, null, 2));
+        if(text) { adaptDelaySuccess(); return text; }
         throw new Error('Model returned empty response');
       }
 
       const e = await r.json().catch(() => ({}));
       const errMsg = e.error?.message || `Status ${r.status}`;
-      console.error(`[API] Error ${r.status}:`, errMsg);
-      console.error('[API] Full error object:', JSON.stringify(e, null, 2));
 
-      if(r.status === 429 || errMsg.includes('RESOURCE_EXHAUSTED')){
-        console.log('[API] Rate limited — waiting 15s before retry...');
-        toast(`Rate limited. Waiting 15s... (attempt ${attempt}/${MAX_RETRIES})`, 'warning', 16000);
-        await sleep(15000);
+      if(r.status === 429 || errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('QUOTA')){
+        adaptDelayRateLimit();
+        const waitMs = Math.min(60000, 8000 * attempt); // 8s, 16s, 24s, 32s
+        toast(`⏳ Rate limited — waiting ${Math.round(waitMs/1000)}s… (attempt ${attempt}/${MAX_RETRIES})`, 'warning', waitMs + 1000);
+        await sleep(waitMs);
       } else {
-        console.log('[API] Non-rate-limit error — waiting 5s before retry...');
         toast(`API error: ${errMsg.slice(0,80)} — retrying in 5s...`, 'warning', 6000);
         await sleep(5000);
       }
     } catch(err) {
-      console.error(`[API] Exception on attempt ${attempt}:`, err.message);
       if(err.message === 'Aborted') throw err;
       if(attempt >= MAX_RETRIES) throw err;
-      toast(`Error: ${err.message.slice(0,60)} — retrying in 5s...`, 'warning', 6000);
-      await sleep(5000);
+      await sleep(3000 * attempt);
     }
   }
   throw new Error('All retries exhausted');
 }
 
 function buildScreeningPrompt(article, criteria, passNum) {
-  const perspective = passNum === 1
-    ? 'You are Reviewer A, an expert systematic review screener with deep domain knowledge in biomedical and clinical research.'
-    : 'You are Reviewer B, an independent systematic review screener providing a second opinion with deep domain knowledge in biomedical and clinical research.';
-
+  // Compact, token-efficient prompt — two independent reviewer perspectives
+  const perspective = passNum === 2
+    ? 'You are Reviewer B, an independent systematic review screener providing a second opinion.'
+    : 'You are Reviewer A, an expert systematic review screener.';
   const titleLine = article.title || '[No title]';
-  const abstractLine = article.abstract || '';
+  const abstractLine = (article.abstract || '').slice(0, 600); // cap to save tokens
   const metaParts = [];
-  if (article.author) metaParts.push('Authors: ' + article.author);
   if (article.year) metaParts.push('Year: ' + article.year);
   if (article.journal) metaParts.push('Journal: ' + article.journal);
 
-  let prompt = perspective + '\n\nEvaluate this article for inclusion in a systematic review.\n\nSCREENING CRITERIA:\n' + criteria + '\n\nARTICLE:\nTitle: ' + titleLine;
+  let prompt = perspective + ' Screen ONE article for a systematic review.\n\nCRITERIA:\n' + criteria + '\n\nARTICLE:\nTitle: ' + titleLine;
   if (metaParts.length > 0) prompt += '\n' + metaParts.join(' | ');
   if (abstractLine) prompt += '\nAbstract: ' + abstractLine;
-  prompt += '\n\nINSTRUCTIONS:\n- Use your FULL domain knowledge. Understand meaning, synonyms, related concepts, and clinical context. Do NOT just keyword-match.\n- INCLUSION-FIRST: Default to Include. Only Exclude if CLEARLY and DEFINITIVELY outside scope.\n  Include = relevant or potentially relevant. Exclude = definitively irrelevant.';
-  if (!abstractLine) prompt += '\n- No abstract available. Be MORE inclusive, lean toward Include.';
-  prompt += '\n\nReturn ONLY valid JSON, no markdown fences:\n{"decision":"Include","reason":"Brief 1-2 sentence explanation"}';
-
+  prompt += '\n\nRULES: Use full domain knowledge. Understand synonyms & clinical context. INCLUSION-FIRST: default Include. Only Exclude if DEFINITIVELY irrelevant.';
+  if (!abstractLine) prompt += ' No abstract — be MORE inclusive.';
+  prompt += '\n\nReturn ONLY valid JSON:\n{"decision":"Include","reason":"1-2 sentences"}';
   return prompt;
 }
 
@@ -945,53 +1023,218 @@ function parseScreeningResponse(text) {
   }
 }
 
+// Live screening stats state
+let _liveScreened = 0, _liveInc = 0, _liveExc = 0, _liveFlg = 0;
+let _liveStartTime = 0;
+
+function resetLiveStats() {
+  _liveScreened = _liveInc = _liveExc = _liveFlg = 0;
+  _liveStartTime = performance.now();
+  _adaptiveDelay = 500; _consecutiveOk = 0;
+  ['ls-total','ls-inc','ls-exc','ls-flg'].forEach(id => { const el = document.getElementById(id); if(el) el.textContent = '0'; });
+  const fl = document.getElementById('live-feed-list'); if(fl) fl.innerHTML = '';
+  const lc = document.getElementById('live-current'); if(lc) lc.style.display = 'none';
+  const le = document.getElementById('live-eta'); if(le) le.textContent = '';
+}
+
+function updateLiveStats(article, decision, reason, passNum) {
+  _liveScreened++;
+  if(decision === 'Include') _liveInc++;
+  else if(decision === 'Exclude') _liveExc++;
+  else _liveFlg++;
+
+  // Update counters with micro-animations
+  function setLive(id, val) {
+    const el = document.getElementById(id); if(!el) return;
+    el.textContent = val;
+    el.closest?.('.live-stat')?.classList.add('bump');
+    setTimeout(() => el.closest?.('.live-stat')?.classList.remove('bump'), 200);
+  }
+  setLive('ls-total', _liveScreened);
+  setLive('ls-inc', _liveInc);
+  setLive('ls-exc', _liveExc);
+  setLive('ls-flg', _liveFlg);
+
+  // ETA — per-pass
+  const total = S.articles.length; // per-pass total
+  const elapsed = performance.now() - _liveStartTime;
+  const avgMs = _liveScreened > 0 ? elapsed / _liveScreened : 0;
+  const remaining = avgMs * (total - _liveScreened);
+  const etaEl = document.getElementById('live-eta');
+  if(etaEl) etaEl.textContent = _liveScreened < total ? '≈ ' + fmtDuration(remaining) + ' left (this pass)' : 'Pass done!';
+
+  // Add to live feed list (newest on top, labelled by pass)
+  const passLabel = passNum === 2 ? '[B]' : '[A]';
+  const feedList = document.getElementById('live-feed-list');
+  if(feedList) {
+    const icon = decision === 'Include' ? '✅' : decision === 'Exclude' ? '❌' : '⚠️';
+    const cls = decision === 'Include' ? 'inc' : decision === 'Exclude' ? 'exc' : 'flg';
+    const item = document.createElement('div');
+    item.className = 'live-feed-item';
+    item.innerHTML = `<span class="live-feed-num">${passLabel}#${_liveScreened}</span><span class="live-result-badge ${cls}">${icon} ${decision}</span><span class="live-feed-title">${H((article.title||'').slice(0,80))}</span><span class="live-feed-reason">${H((reason||'').slice(0,80))}</span>`;
+    feedList.insertBefore(item, feedList.firstChild);
+    while(feedList.children.length > 60) feedList.removeChild(feedList.lastChild);
+  }
+  // NOTE: injectLiveResult is called manually by runDualPass after adjudication (Pass 2 only)
+}
+
+function updateCurrentArticle(article, passNum) {
+  const lc = document.getElementById('live-current'); if(lc) lc.style.display = 'block';
+  const lt = document.getElementById('live-current-title');
+  const lm = document.getElementById('live-current-meta');
+  const tag = document.querySelector('.live-current-tag');
+  if(tag) tag.textContent = passNum === 2 ? 'Pass 2 — Reviewer B Screening' : 'Pass 1 — Reviewer A Screening';
+  if(lt) lt.textContent = article.title || '[No title]';
+  if(lm) { const parts = []; if(article.author) parts.push(article.author.split(' and ')[0]); if(article.year) parts.push(article.year); if(article.journal) parts.push(article.journal); lm.textContent = parts.join(' · '); }
+}
+
+// Live results injection into Results tab
+let _resultsList = [];
+function initLiveResults() {
+  _resultsList = [];
+  const con = document.getElementById('results-content');
+  if(!con) return;
+  con.innerHTML = `
+    <div class="stats-row" id="live-res-stats" style="margin-bottom:16px">
+      <div class="stat-card c-blue"><div class="stat-label">Screened</div><div class="stat-value" id="lrs-total">0</div><div class="stat-sub">of ${S.articles.length}</div></div>
+      <div class="stat-card c-green"><div class="stat-label">Included</div><div class="stat-value" id="lrs-inc">0</div><div class="stat-sub">Passed criteria</div></div>
+      <div class="stat-card c-red"><div class="stat-label">Excluded</div><div class="stat-value" id="lrs-exc">0</div><div class="stat-sub">Outside scope</div></div>
+      <div class="stat-card c-amber"><div class="stat-label">Uncertain</div><div class="stat-value" id="lrs-flg">0</div><div class="stat-sub">Human review</div></div>
+    </div>
+    <div style="margin-bottom:12px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <div class="filter-row" id="live-res-filters">
+        <button class="flt-btn active" data-f="all">All</button>
+        <button class="flt-btn" data-f="include">✅ Included</button>
+        <button class="flt-btn" data-f="exclude">❌ Excluded</button>
+        <button class="flt-btn" data-f="uncertain">⚠️ Uncertain</button>
+      </div>
+      <input class="input" id="live-res-search" placeholder="🔍 Search…" style="width:190px;margin-left:auto">
+    </div>
+    <div style="font-size:11.5px;color:var(--accent);margin-bottom:8px;display:flex;align-items:center;gap:6px"><div class="live-dot"></div> Results updating live as screening progresses</div>
+    <div class="tbl-wrap"><table><thead><tr><th>#</th><th>Title</th><th>Decision</th><th>Reason</th></tr></thead><tbody id="live-res-tbody"></tbody></table></div>
+  `;
+  // Wire filters
+  let liveFilter = 'all', liveSearch = '';
+  con.querySelectorAll('#live-res-filters .flt-btn').forEach(b => b.addEventListener('click', () => {
+    liveFilter = b.dataset.f;
+    con.querySelectorAll('#live-res-filters .flt-btn').forEach(x => x.classList.remove('active'));
+    b.classList.add('active');
+    renderLiveResultsTable(liveFilter, liveSearch);
+  }));
+  con.querySelector('#live-res-search')?.addEventListener('input', e => { liveSearch = e.target.value.toLowerCase(); renderLiveResultsTable(liveFilter, liveSearch); });
+  window._liveFilter = () => liveFilter;
+  window._liveSearch = () => liveSearch;
+}
+
+function injectLiveResult(article, decision, reason) {
+  _resultsList.push({article, decision, reason});
+  // Update stat cards in results tab
+  const inc = _resultsList.filter(r => r.decision === 'Include').length;
+  const exc = _resultsList.filter(r => r.decision === 'Exclude').length;
+  const flg = _resultsList.filter(r => r.decision !== 'Include' && r.decision !== 'Exclude').length;
+  setText('lrs-total', _resultsList.length);
+  setText('lrs-inc', inc);
+  setText('lrs-exc', exc);
+  setText('lrs-flg', flg);
+  renderLiveResultsTable(window._liveFilter ? window._liveFilter() : 'all', window._liveSearch ? window._liveSearch() : '');
+}
+
+function renderLiveResultsTable(filter, search) {
+  const tb = document.getElementById('live-res-tbody'); if(!tb) return;
+  let rows = _resultsList;
+  if(filter === 'include') rows = rows.filter(r => r.decision === 'Include');
+  else if(filter === 'exclude') rows = rows.filter(r => r.decision === 'Exclude');
+  else if(filter === 'uncertain') rows = rows.filter(r => r.decision !== 'Include' && r.decision !== 'Exclude');
+  if(search) rows = rows.filter(r => (r.article.title||'').toLowerCase().includes(search) || (r.reason||'').toLowerCase().includes(search));
+  if(!rows.length) { tb.innerHTML = '<tr><td colspan="4" style="text-align:center;padding:24px;color:var(--text-3)">No articles match this filter yet.</td></tr>'; return; }
+  // Show newest first
+  tb.innerHTML = [...rows].reverse().map((r, i) => {
+    const b = r.decision==='Include' ? '<span class="badge badge-include">✓ Include</span>' : r.decision==='Exclude' ? '<span class="badge badge-exclude">✕ Exclude</span>' : '<span class="badge badge-flagged">⚠ Uncertain</span>';
+    return `<tr><td class="dim">${rows.length - i}</td><td style="max-width:280px;word-break:break-word;font-size:12.5px">${H((r.article.title||'').slice(0,110))}</td><td>${b}</td><td class="dim" style="max-width:240px;font-size:11.5px">${H((r.reason||'').slice(0,120))}</td></tr>`;
+  }).join('');
+}
+
+function fmtDuration(ms) {
+  if(ms < 1000) return '<1s';
+  const s = Math.round(ms/1000);
+  if(s < 60) return s + 's';
+  return Math.floor(s/60) + 'm ' + (s%60) + 's';
+}
+
 async function runDualPass(arts, criteria, key, model, onProg) {
-  const pass1 = [], pass2 = [], agreed = [], disagreements = [];
+  const pass1 = [], pass2 = [];
+  const agreed = [], disagreements = [];
   const total = arts.length;
-  onProg({lbl:'🔬 Starting domain-expert dual-pass screening…', pct:2, status:'Initializing…', detail:'0 / ' + total});
+
+  // ── SWEEP 1: Reviewer A evaluates ALL articles ──────────────
+  onProg({lbl:'🔬 Pass 1 — Reviewer A starting…', pct:1, status:'Initializing…', detail:'0 / ' + total});
+  const liveStatus = document.getElementById('live-feed-status');
+  if(liveStatus) liveStatus.textContent = 'Pass 1 — Reviewer A reviewing all articles…';
 
   for (let i = 0; i < total; i++) {
     if (S.aborted) throw new Error('Aborted');
     const art = arts[i];
-    const pct = 2 + Math.round((i / total) * 96);
+    const pct = 1 + Math.round((i / total) * 48); // 1–49%
+    updateCurrentArticle(art, 1);
+    onProg({lbl:'🔬 Pass 1 — Article ' + (i+1) + '/' + total, pct, status:(art.title||'').slice(0,55) + '…', detail:(i+1) + ' / ' + total});
 
-    // Pass 1: First independent LLM evaluation
-    onProg({lbl:'🔬 Article ' + (i+1) + '/' + total + ' — Pass 1', pct, status:(art.title||'').slice(0,55) + '…', detail:(i+1) + ' / ' + total});
     let r1;
     try {
       r1 = parseScreeningResponse(await callGeminiWithRetry(buildScreeningPrompt(art, criteria, 1), key, model, 0.1));
     } catch (err) {
       if (err.message === 'Aborted') throw err;
-      r1 = {decision:'Error', reason:'Pass 1 failed: ' + err.message};
+      r1 = {decision:'Include', reason:'Pass 1 failed — defaulting to Include: ' + err.message};
     }
 
-    await sleep(2000);
-    if (S.aborted) throw new Error('Aborted');
+    pass1.push({key:art.key, title:art.title, decision:r1.decision, reason:r1.reason});
 
-    // Pass 2: Second independent LLM evaluation
-    onProg({lbl:'🔬 Article ' + (i+1) + '/' + total + ' — Pass 2', pct, status:(art.title||'').slice(0,55) + '…', detail:(i+1) + ' / ' + total});
+    // Live stats show Pass 1 decisions as they come in
+    updateLiveStats(art, r1.decision, r1.reason, 1);
+    console.log('[Pass1] #' + (i+1) + ' → ' + r1.decision);
+
+    if (i < total - 1) await sleep(_adaptiveDelay);
+  }
+
+  // ── SWEEP 2: Reviewer B evaluates ALL articles ──────────────
+  if(liveStatus) liveStatus.textContent = 'Pass 2 — Reviewer B reviewing all articles…';
+  // Reset live counters for Pass 2
+  _liveScreened = _liveInc = _liveExc = _liveFlg = 0;
+  _liveStartTime = performance.now(); // fresh timer for Pass 2 ETA
+  ['ls-total','ls-inc','ls-exc','ls-flg'].forEach(id => { const el = document.getElementById(id); if(el) el.textContent = '0'; });
+
+  for (let i = 0; i < total; i++) {
+    if (S.aborted) throw new Error('Aborted');
+    const art = arts[i];
+    const pct = 50 + Math.round((i / total) * 48); // 50–98%
+    updateCurrentArticle(art, 2);
+    onProg({lbl:'🔬 Pass 2 — Article ' + (i+1) + '/' + total, pct, status:(art.title||'').slice(0,55) + '…', detail:(i+1) + ' / ' + total});
+
     let r2;
     try {
       r2 = parseScreeningResponse(await callGeminiWithRetry(buildScreeningPrompt(art, criteria, 2), key, model, 0.1));
     } catch (err) {
       if (err.message === 'Aborted') throw err;
-      r2 = {decision:'Error', reason:'Pass 2 failed: ' + err.message};
+      r2 = {decision:'Include', reason:'Pass 2 failed — defaulting to Include: ' + err.message};
     }
 
-    pass1.push({key:art.key, title:art.title, decision:r1.decision, reason:r1.reason});
     pass2.push({key:art.key, title:art.title, decision:r2.decision, reason:r2.reason});
 
-    // Adjudicate: both passes must agree
-    if (r1.decision === r2.decision && r1.decision !== 'Error') {
-      agreed.push({key:art.key, title:art.title, decision:r1.decision, reason:r1.reason, pass1_reason:r1.reason, pass2_reason:r2.reason});
+    // Live stats for Pass 2
+    updateLiveStats(art, r2.decision, r2.reason, 2);
+    console.log('[Pass2] #' + (i+1) + ' → ' + r2.decision);
+
+    // Adjudicate immediately so results tab updates live after each Pass 2 decision
+    const r1 = pass1[i];
+    if (r1 && r1.decision === r2.decision) {
+      const finalDec = r1.decision;
+      agreed.push({key:art.key, title:art.title, decision:finalDec, reason:r1.reason, pass1_reason:r1.reason, pass2_reason:r2.reason});
+      injectLiveResult(art, finalDec, 'Agreed: ' + r1.reason);
     } else {
-      disagreements.push({key:art.key, title:art.title, pass1_decision:r1.decision, pass1_reason:r1.reason, pass2_decision:r2.decision, pass2_reason:r2.reason, final_decision:'FLAGGED_FOR_HUMAN_REVIEW'});
+      disagreements.push({key:art.key, title:art.title, pass1_decision:r1?.decision||'?', pass1_reason:r1?.reason||'', pass2_decision:r2.decision, pass2_reason:r2.reason, final_decision:'FLAGGED'});
+      injectLiveResult(art, 'Flagged', 'Disagreement: P1=' + (r1?.decision||'?') + ', P2=' + r2.decision);
     }
 
-    console.log('[Screen] #' + (i+1) + ' P1:' + r1.decision + ' P2:' + r2.decision + ' -> ' + (r1.decision===r2.decision ? r1.decision : 'FLAGGED'));
-
-    // Rate-limit delay between articles (2.5s gap)
-    if (i < total - 1) await sleep(2500);
+    if (i < total - 1) await sleep(_adaptiveDelay);
   }
 
   const inc = agreed.filter(r => r.decision === 'Include').length;
@@ -1066,15 +1309,16 @@ function renderResTable(agreed,disagreements){
   const tb=document.getElementById('res-tbody');if(!tb)return;
   let rows=[];
   const ag=agreed.map(r=>({...r,_type:'agreed'}));
-  const fl=disagreements.map(d=>({key:d.key,title:d.title,decision:'FLAGGED',reason:`P1:${d.pass1_decision} / P2:${d.pass2_decision}`,_type:'flagged'}));
-  if(curFilter==='all')rows=[...ag,...fl];
-  else if(curFilter==='include')rows=ag.filter(r=>r.decision==='Include');
-  else if(curFilter==='exclude')rows=ag.filter(r=>r.decision==='Exclude');
-  else if(curFilter==='flagged')rows=fl;
+  const fl=disagreements.map(d=>({key:d.key,title:d.title,decision:'Uncertain',reason:`Uncertain — needs review`,_type:'flagged'}));
+  const allRows=[...ag,...fl];
+  if(curFilter==='all')rows=allRows;
+  else if(curFilter==='include')rows=allRows.filter(r=>r.decision==='Include');
+  else if(curFilter==='exclude')rows=allRows.filter(r=>r.decision==='Exclude');
+  else if(curFilter==='flagged')rows=allRows.filter(r=>r.decision!=='Include'&&r.decision!=='Exclude');
   if(curSearch)rows=rows.filter(r=>(r.title||'').toLowerCase().includes(curSearch)||(r.reason||'').toLowerCase().includes(curSearch));
   if(!rows.length){tb.innerHTML=`<tr><td colspan="4" style="text-align:center;padding:32px;color:var(--text-3)">No articles match this filter.</td></tr>`;return}
   tb.innerHTML=rows.map((r,i)=>{
-    const b=r.decision==='Include'?`<span class="badge badge-include">✓ Include</span>`:r.decision==='Exclude'?`<span class="badge badge-exclude">✕ Exclude</span>`:`<span class="badge badge-flagged">⚠ Flagged</span>`;
+    const b=r.decision==='Include'?`<span class="badge badge-include">✓ Include</span>`:r.decision==='Exclude'?`<span class="badge badge-exclude">✕ Exclude</span>`:`<span class="badge badge-flagged">⚠ Uncertain</span>`;
     return`<tr><td class="dim">${i+1}</td><td style="max-width:300px;word-break:break-word;font-size:12.5px">${H((r.title||r.key||'').slice(0,110))}${(r.title||'').length>110?'…':''}</td><td>${b}</td><td class="dim" style="max-width:260px;font-size:11.5px">${H((r.reason||'').slice(0,110))}${(r.reason||'').length>110?'…':''}</td></tr>`;
   }).join('');
 }
@@ -1232,6 +1476,18 @@ async function runScreening(){
   if(abortBtn)abortBtn.style.display='inline-flex';
   if(pw)pw.classList.add('visible');
 
+  // Show + reset live feed
+  const liveFeed = document.getElementById('live-feed');
+  if(liveFeed) liveFeed.classList.add('visible');
+  const liveDot = document.getElementById('live-dot');
+  if(liveDot) liveDot.style.animation = '';
+  const liveStatus = document.getElementById('live-feed-status');
+  if(liveStatus) liveStatus.textContent = 'Screening in progress…';
+  resetLiveStats();
+
+  // Init live results in results tab
+  initLiveResults();
+
   const model=document.getElementById('model-select')?.value||getModel();
 
   try{
@@ -1248,16 +1504,28 @@ async function runScreening(){
     const inc=agreed.filter(r=>r.decision==='Include').length;
     const exc=agreed.filter(r=>r.decision==='Exclude').length;
     const tot=agreed.length+disagreements.length;
-    const rate=tot>0?(agreed.length/tot*100).toFixed(1):0;
+    const rate=tot>0?((inc/tot)*100).toFixed(1):0;
 
     addHistory({name:S.files.map(f=>f.name).join(', ').slice(0,50)||'Session',date:new Date().toLocaleString(),model,files:S.files.length,total:tot,included:inc,excluded:exc,flagged:disagreements.length,agreeRate:rate});
 
+    // Stop live dot animation
+    if(liveDot) liveDot.style.animation = 'none';
+    if(liveStatus) liveStatus.textContent = '✅ Screening complete!';
+
+    // Final render of results and audit
     renderResults(agreed,disagreements);renderAudit(pass1,pass2);
-    toast(`✅ Done! ${inc} included · ${exc} excluded · ${disagreements.length} flagged`,'success',7000);
+    toast(`✅ Done! ${inc} included · ${exc} excluded · ${disagreements.length} flagged for review`,'success',7000);
     switchTab('results');
   }catch(err){
-    if(err.message==='Aborted')toast('Aborted.','warning');
-    else{toast(`Error: ${err.message}`,'error',9000);console.error(err)}
+    if(err.message==='Aborted'){
+      toast('Aborted — partial results saved.','warning');
+      if(liveDot) liveDot.style.animation = 'none';
+      if(liveStatus) liveStatus.textContent = '⛔ Aborted';
+      // Still render partial results
+      if(S.agreed.length > 0 || S.disagreements.length > 0) renderResults(S.agreed, S.disagreements);
+    } else {
+      toast(`Error: ${err.message}`,'error',9000);console.error(err);
+    }
   }finally{
     S.isRunning=false;
     if(runBtn){runBtn.disabled=false;runBtn.innerHTML='🤖 Run AI Screening'}
