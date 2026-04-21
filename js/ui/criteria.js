@@ -255,7 +255,18 @@ ${text}`;
             })
           });
 
-          if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+          if (!resp.ok) {
+            // Only treat 429 as a rate limit for key rotation; other errors should be surfaced
+            const ra = resp.headers.get('Retry-After');
+            if (resp.status === 429) {
+              if (ra) await sleep(parseInt(ra, 10) * 1000 + Math.floor(Math.random() * 300));
+              // try next key
+              continue;
+            }
+            // For other non-OK responses (e.g., 503), throw so the UI shows an error
+            throw new Error(`HTTP ${resp.status}`);
+          }
+
           const data = await resp.json();
           const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '';
           let clean = rawText.replace(/```json\s*/gi, '').replace(/```\s*/g, '').trim();

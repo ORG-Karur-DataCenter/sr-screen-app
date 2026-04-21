@@ -202,12 +202,19 @@ function startScreening(toast, switchTab, onScreeningComplete) {
 
     if (msg.type === 'ERROR') {
       const p = msg.payload;
-      if (p.keySwitched) {
-        toast(`🔄 Rate limited on #${p.index + 1}. Switching to next API key...`, 'info');
-      } else {
+      // Log full details to console for debugging (do not surface raw errorType to users)
+      try { console.error('Screening worker ERROR payload:', p); } catch (e) {}
+
+      if (p.isRateLimit) {
+        // Friendly rate-limit message
         const retryText = p.retriesLeft > 0 ? ` Retrying (${p.retriesLeft} left)…` : ' No retries left.';
-        const errMsg = p.isRateLimit ? `⏳ Rate limited on #${p.index + 1}.${retryText}` : `⚠️ Error on #${p.index + 1}: ${p.message}.${retryText}`;
-        toast(errMsg, p.isRateLimit ? 'warn' : 'error');
+        toast(`⏳ Rate limited on #${p.index + 1}.${retryText}`, 'warn');
+      } else if (p.isServiceUnavailable) {
+        // Service unavailable - concise message
+        toast('⚠️ Service temporarily unavailable. Retrying shortly…', 'error');
+      } else {
+        // Generic user-friendly error; full details are in console
+        toast('⚠️ API error encountered. Check console for details.', 'error');
       }
     }
 

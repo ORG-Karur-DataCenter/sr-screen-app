@@ -8,6 +8,8 @@
 let paused = false;
 let aborted = false;
 let completedCount = 0;
+// Track key cooldowns to avoid reusing keys immediately after rate limits
+const keyCooldowns = {};
 
 self.onmessage = function (e) {
   const { type, payload } = e.data;
@@ -62,6 +64,7 @@ async function runScreening({ articles, criteria, apiKeys, model, config }) {
     const article = articles[i];
     let result = null;
     let retries = (config.retryLimit || 3) + apiKeys.length * 2;
+    const initialRetries = retries;
     let keysExhaustedCycle = 0;
 
     while (retries > 0) {
@@ -73,7 +76,18 @@ async function runScreening({ articles, criteria, apiKeys, model, config }) {
       } catch (err) {
         retries--;
         const errMsg = err.message || '';
-        const isRateLimit = errMsg.includes('429') || errMsg.includes('RESOURCE_EXHAUSTED') || errMsg.includes('TOO_MANY_REQUESTS') || errMsg.includes('QUOTA_EXCEEDED');
+        const status = err.status || (errMsg.match(/HTTP\s(\d{3})/) || [])[1];
+          const isRateLimit = status === '429';
+        const isServiceUnavailable = status === '503' || errMsg.includes('503') || errMsg.includes('SERVICE_UNAVAILABLE');
+
+        // Treat 503 as a short transient error: very short fixed backoff with jitter, do not cooldown the key immediately
+        if (isServiceUnavailable) {
+          self.postMessage({ type: 'ERROR', payload: { index: i, message: 'Service unavailable (503)', retriesLeft: retries, isServiceUnavailable: true } });
+          // Very short fixed backoff + jitter (200-1000ms)
+          const shortDelay = 200 + Math.floor(Math.random() * 800);
+          await sleep(shortDelay);
+          continue;
+        }
 
         let keySwitched = false;
         if (isRateLimit && apiKeys.length > 1) {
@@ -99,11 +113,34 @@ async function runScreening({ articles, criteria, apiKeys, model, config }) {
           }
         });
 
-        if (isRateLimit && !keySwitched) {
-          // Back off 10 seconds if we hit limit and can't switch/exhausted all keys
-          await sleep(10000);
+        // Compute attempt number for exponential backoff
+        const attempt = initialRetries - retries;
+
+        if (isRateLimit) {
+          // Mark the key on cooldown to avoid immediate reuse
+          try {
+            const apiKey = apiKeys[currentKeyIndex];
+            // Cooldown 30s by default
+            keyCooldowns[apiKey] = Date.now() + (config.keyCooldownMs || 30000);
+          } catch (e) {}
+
+          // If server provided Retry-After, respect it
+          const retryAfterMs = (err.retryAfter ? parseInt(err.retryAfter, 10) * 1000 : null);
+          if (retryAfterMs && !isNaN(retryAfterMs)) {
+            await sleep(retryAfterMs + Math.floor(Math.random() * 300));
+          } else if (!keySwitched) {
+            // Exponential backoff with jitter
+            const base = 500;
+            const delay = Math.min(60000, Math.pow(2, Math.max(0, attempt)) * base) + Math.floor(Math.random() * 500);
+            await sleep(delay);
+          } else {
+            await sleep(250 + Math.floor(Math.random() * 200));
+          }
         } else if (retries > 0 && !keySwitched) {
-          await sleep(2000);
+          // Transient non-rate errors: short backoff
+          const base = 400;
+          const delay = Math.min(10000, Math.pow(2, Math.max(0, attempt)) * base) + Math.floor(Math.random() * 300);
+          await sleep(delay);
         } else if (keySwitched) {
           await sleep(250); // Small pause during key rotation
         }
@@ -179,11 +216,20 @@ async function screenArticle(article, criteria, apiKey, model, config) {
   const prompt = buildPrompt(article, criteria);
   const t0 = performance.now();
 
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${apiKey}`;
+  const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+
+  // Build fetch options. By default we use query `key=` for API keys unless
+  // `config.useBearerAuth` is true (for OAuth2 access tokens).
+  const headers = { 'Content-Type': 'application/json' };
+  let url = `${endpoint}?key=${apiKey}`;
+  if (config && config.useBearerAuth) {
+    url = endpoint;
+    headers['Authorization'] = `Bearer ${apiKey}`;
+  }
 
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers,
     body: JSON.stringify({
       contents: [{ role: 'user', parts: [{ text: prompt }] }],
       generationConfig: {
@@ -195,7 +241,12 @@ async function screenArticle(article, criteria, apiKey, model, config) {
 
   if (!response.ok) {
     const errBody = await response.text();
-    throw new Error(`API ${response.status}: ${errBody.slice(0, 200)}`);
+    const err = new Error(`API ${response.status}: ${errBody.slice(0, 200)}`);
+    err.status = response.status;
+    // Retry-After may be in seconds, prefer header when present
+    const ra = response.headers.get('Retry-After');
+    if (ra) err.retryAfter = ra;
+    throw err;
   }
 
   const data = await response.json();

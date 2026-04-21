@@ -13,7 +13,8 @@ const STORAGE_KEYS = {
 };
 
 const MODELS = [
-  { id: 'gemini-flash-latest', name: 'gemini-flash-latest', desc: 'Fast, cheap — recommended for large batches', cost: '~$0.01 / 1k articles' },
+  { id: 'gemini-2.5-flash', name: 'gemini-2.5-flash', desc: 'Fast, low-latency — recommended for batches', cost: '~$0.01 / 1k articles' },
+  { id: 'gemini-flash-latest', name: 'gemini-flash-latest', desc: 'Fallback fast model', cost: '~$0.01 / 1k articles' },
   { id: 'gemini-2.0-flash', name: 'gemini-2.0-flash', desc: 'Next generation fast model', cost: '~$0.01 / 1k articles' },
   { id: 'gemini-pro-latest', name: 'gemini-pro-latest', desc: 'Highest quality, slower, more expensive', cost: '~$0.18 / 1k articles' },
 ];
@@ -60,7 +61,7 @@ export function getConfig() {
     const saved = localStorage.getItem(STORAGE_KEYS.config);
     if (saved) return JSON.parse(saved);
   } catch {}
-  return { batchSize: 10, requestDelayMs: 100, temperature: 0.1, maxTokens: 512, retryLimit: 3 };
+  return { batchSize: 10, requestDelayMs: 100, temperature: 0.1, maxTokens: 512, retryLimit: 6, useBearerAuth: false };
 }
 
 export function hasApiKey() {
@@ -145,7 +146,11 @@ function buildSettingsHTML() {
         </div>
         <div class="form-field">
           <label class="form-label" for="cfg-retries">Retries</label>
-          <input type="number" class="form-input" id="cfg-retries" value="3" min="0" max="10" />
+          <input type="number" class="form-input" id="cfg-retries" value="6" min="0" max="20" />
+        </div>
+        <div class="form-field">
+          <label class="form-label" for="cfg-use-bearer">Use Bearer Auth</label>
+          <input type="checkbox" id="cfg-use-bearer" />
         </div>
       </div>
       <button class="btn btn-secondary" id="btn-save-config" style="margin-top:var(--space-4)">Save Configuration</button>
@@ -215,17 +220,23 @@ function wireEvents(container, { onApiKeyChange, toast }) {
 
     try {
       const model = getSelectedModel();
-      const resp = await fetch(
-        `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
-        {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ role: 'user', parts: [{ text: 'Respond with only the word "OK".' }] }],
-            generationConfig: { temperature: 0, maxOutputTokens: 8 }
-          })
-        }
-      );
+      const config = getConfig();
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
+      let url = `${endpoint}?key=${key}`;
+      const headers = { 'Content-Type': 'application/json' };
+      if (config.useBearerAuth) {
+        url = endpoint;
+        headers['Authorization'] = `Bearer ${key}`;
+      }
+
+      const resp = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          contents: [{ role: 'user', parts: [{ text: 'Respond with only the word "OK".' }] }],
+          generationConfig: { temperature: 0, maxOutputTokens: 8 }
+        })
+      });
 
       if (resp.ok) {
         updateApiStatus(container, true, `${keys.length} keys configured`);
@@ -258,7 +269,8 @@ function wireEvents(container, { onApiKeyChange, toast }) {
       requestDelayMs: parseInt(container.querySelector('#cfg-delay').value) || 100,
       temperature: parseFloat(container.querySelector('#cfg-temp').value) || 0.1,
       maxTokens: parseInt(container.querySelector('#cfg-tokens').value) || 512,
-      retryLimit: parseInt(container.querySelector('#cfg-retries').value) || 3
+      retryLimit: parseInt(container.querySelector('#cfg-retries').value) || 3,
+      useBearerAuth: !!container.querySelector('#cfg-use-bearer').checked
     };
     localStorage.setItem(STORAGE_KEYS.config, JSON.stringify(config));
     toast('✅ Configuration saved.', 'success');
@@ -303,6 +315,8 @@ function loadSavedValues() {
   container.querySelector('#cfg-temp').value = config.temperature;
   container.querySelector('#cfg-tokens').value = config.maxTokens;
   container.querySelector('#cfg-retries').value = config.retryLimit;
+  const cb = container.querySelector('#cfg-use-bearer');
+  if (cb) cb.checked = !!config.useBearerAuth;
 }
 
 /* ─── API Status Display ───────────────────── */
